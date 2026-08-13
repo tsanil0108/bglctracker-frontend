@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react'
+﻿import React, { useEffect, useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
+import { Wallet, BellRing, History, TrendingUp } from 'lucide-react'
 import {
   LayoutDashboard,
   Landmark,
@@ -24,6 +25,10 @@ const nav = [
   { to: '/bg', label: 'Bank Guarantees', icon: ShieldCheck, tab: 'bg' },
   { to: '/fd-linking', label: 'FD Linking', icon: Link2 },
   { to: '/reports', label: 'Reports', icon: FileBarChart2 },
+  { to: '/bank-limits', label: 'Bank Limits', icon: Wallet },
+  { to: '/alerts', label: 'Alerts', icon: BellRing },
+  { to: '/audit-log', label: 'Audit Log', icon: History },
+  { to: '/exposure', label: 'Exposure', icon: TrendingUp },
 ]
 
 const masterLinks = [

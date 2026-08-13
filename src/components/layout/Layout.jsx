@@ -11,6 +11,9 @@ const TITLES = {
   '/bg': 'Bank Guarantees',
   '/fd-linking': 'FD Linking',
   '/reports': 'Reports',
+    '/bank-limits': 'Bank Limits',
+  '/alerts': 'Alerts',
+  '/audit-log': 'Audit Log',
 }
 
 function titleFor(pathname) {

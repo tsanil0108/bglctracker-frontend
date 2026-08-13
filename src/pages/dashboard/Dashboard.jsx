@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { ShieldCheck, ScrollText, Landmark, Lock, AlertTriangle } from 'lucide-react'
 import PageHeader from '../../components/common/PageHeader'
 import Card from '../../components/common/Card'
@@ -7,7 +8,9 @@ import EmptyState from '../../components/common/EmptyState'
 import StatusBadge from '../../components/common/StatusBadge'
 import { useToast } from '../../components/common/Toast'
 import { dashboardApi } from '../../api/dashboardApi'
+import { alertsApi } from '../../api/alertsApi'
 import { formatCurrency, formatDate, daysUntil } from '../../utils/formatters'
+import { ALERT_SEVERITY_STYLES } from '../../utils/constants'
 
 const WINDOWS = [
   { key: '7Days', label: '7 days' },
@@ -69,6 +72,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [bgWindow, setBgWindow] = useState('7Days')
   const [lcWindow, setLcWindow] = useState('7Days')
+  const [alerts, setAlerts] = useState([])
 
   useEffect(() => {
     dashboardApi
@@ -77,6 +81,10 @@ export default function Dashboard() {
       .catch(() => push('Could not load the dashboard.', 'error'))
       .finally(() => setLoading(false))
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    alertsApi.getAll().then((a) => setAlerts(a.slice(0, 6))).catch(() => {})
   }, [])
 
   if (loading) return <Loader />
@@ -99,6 +107,32 @@ export default function Dashboard() {
         <KpiCard icon={Landmark} label="Total Open FD" value={formatCurrency(data.totalOpenFdAmount)} accent="bg-fd-600" />
         <KpiCard icon={Lock} label="Total Lien-Marked FD" value={formatCurrency(data.totalLienMarkedFdAmount)} accent="bg-ink-900" />
       </div>
+
+      {alerts.length > 0 && (
+        <section className="mb-8">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="font-display text-lg font-semibold text-ink-900">Critical Alerts</h2>
+            <Link to="/alerts" className="text-xs font-medium text-muted hover:text-ink-900">View all →</Link>
+          </div>
+          <div className="divide-y divide-border overflow-hidden rounded-xl2 border border-border bg-white shadow-card">
+            {alerts.map((a) => (
+              <Link
+                key={a.id}
+                to={a.module === 'BG' ? `/bg/${a.recordId}` : a.module === 'LC' ? '/lc' : a.module === 'FD' ? '/fd' : '/bank-limits'}
+                className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 hover:bg-ink-50/40"
+              >
+                <div>
+                  <p className="text-sm font-medium text-ink-900">{a.title} — {a.recordNo}</p>
+                  <p className="text-xs text-muted">{a.message}</p>
+                </div>
+                <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${ALERT_SEVERITY_STYLES[a.severity]}`}>
+                  {a.module}
+                </span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <section>

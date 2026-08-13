@@ -17,8 +17,16 @@ import GuaranteeTypes from './pages/master/GuaranteeTypes'
 import FdList from './pages/fd/FdList'
 import LcList from './pages/lc/LcList'
 import BgList from './pages/bg/BgList'
+import BgDetails from './pages/bg/BgDetails'
 import FdLinkPage from './pages/fdlink/FdLinkPage'
 import Reports from './pages/reports/Reports'
+
+import BankLimits from './pages/banklimits/BankLimits'
+import Alerts from './pages/alerts/Alerts'
+import AuditLog from './pages/audit/AuditLog'
+
+import LcDetails from './pages/lc/LcDetails'
+import Exposure from './pages/exposure/Exposure'
 
 export default function App() {
   return (
@@ -47,8 +55,16 @@ export default function App() {
         <Route path="fd" element={<FdList />} />
         <Route path="lc" element={<LcList />} />
         <Route path="bg" element={<BgList />} />
+        <Route path="bg/:id" element={<BgDetails />} />
+        <Route path="lc/:id" element={<LcDetails />} />
         <Route path="fd-linking" element={<FdLinkPage />} />
         <Route path="reports" element={<Reports />} />
+        
+
+        <Route path="bank-limits" element={<BankLimits />} />
+        <Route path="alerts" element={<Alerts />} />
+        <Route path="audit-log" element={<AuditLog />} />
+        <Route path="exposure" element={<Exposure />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />
