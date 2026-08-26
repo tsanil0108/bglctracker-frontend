@@ -1,510 +1,2442 @@
-import React, { useEffect, useState, useCallback } from 'react'
-import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, Plus, Upload, Download, Trash2, ShieldCheck, History } from 'lucide-react'
+import React, {
+  useEffect,
+  useMemo,
+  useState,
+} from 'react'
+
+import {
+  ArrowLeft,
+  Download,
+  Eye,
+  FileText,
+  Trash2,
+  Upload,
+  History,
+  Plus,
+  Link2,
+  Unlink,
+  Landmark,
+} from 'lucide-react'
+
+import {
+  Link,
+  useParams,
+} from 'react-router-dom'
+
 import PageHeader from '../../components/common/PageHeader'
+import Card from '../../components/common/Card'
 import Button from '../../components/common/Button'
-import Modal from '../../components/common/Modal'
-import ConfirmDialog from '../../components/common/ConfirmDialog'
 import Loader from '../../components/common/Loader'
 import StatusBadge from '../../components/common/StatusBadge'
-import { Input, Select, Textarea } from '../../components/common/Field'
-import { useToast } from '../../components/common/Toast'
-import { extractErrorMessage } from '../../api/axiosClient'
-import { bgApi } from '../../api/bgApi'
-import { bgAmendmentApi } from '../../api/bgAmendmentApi'
-import { documentApi } from '../../api/documentApi'
-import { auditApi } from '../../api/auditApi'
+
 import {
-  AMENDMENT_TYPES, BG_LIFECYCLE_STATUS, BG_DOCUMENT_TYPES, EXPIRY_INDICATOR_STYLES, AUDIT_ACTION_LABELS,
-} from '../../utils/constants'
-import { formatCurrency, formatDate } from '../../utils/formatters'
+  Input,
+  Select,
+} from '../../components/common/Field'
 
-const emptyAmendment = {
-  amendmentDate: '', amendmentType: 'EXTENSION', newBgAmount: '', newExpiryDate: '',
-  newClaimExpiryDate: '', reason: '', remarks: '',
+import {
+  useToast,
+} from '../../components/common/Toast'
+
+import {
+  bgApi,
+} from '../../api/bgApi'
+
+import {
+  fdLinkApi,
+} from '../../api/fdLinkApi'
+
+import {
+  documentApi,
+} from '../../api/documentApi'
+
+import {
+  extractErrorMessage,
+} from '../../api/axiosClient'
+
+import {
+  formatCurrency,
+  formatDate,
+} from '../../utils/formatters'
+
+
+const DOCUMENT_TYPES = [
+  'Original BG',
+  'Amendment',
+  'Extension Letter',
+  'Bank Advice',
+  'Release Letter',
+  'Invocation Letter',
+  'Other',
+]
+
+
+function safeNumber(value) {
+
+  const parsed =
+    Number(value)
+
+  return Number.isFinite(parsed)
+    ? parsed
+    : 0
 }
 
-const emptyLifecycle = {
-  targetStatus: '', releaseRequestDate: '', releaseDate: '', releaseReferenceNumber: '',
-  originalBgReceivedBack: '', releaseRemarks: '', closureDate: '', closureRemarks: '',
-}
-
-function ExpiryPill({ label, date, days, indicator }) {
-  if (!date) return (
-    <div className="rounded-xl2 border border-border bg-white p-4">
-      <p className="text-xs font-medium uppercase tracking-wide text-muted">{label}</p>
-      <p className="mt-1 text-sm text-muted">Not set</p>
-    </div>
-  )
-  const style = EXPIRY_INDICATOR_STYLES[indicator] || 'bg-ink-50 text-muted ring-1 ring-inset ring-border'
-  const dayText =
-    days === null || days === undefined ? '—' :
-    days < 0 ? `${Math.abs(days)} day${Math.abs(days) === 1 ? '' : 's'} overdue` :
-    days === 0 ? 'Due today' : `${days} day${days === 1 ? '' : 's'} left`
-  return (
-    <div className="rounded-xl2 border border-border bg-white p-4">
-      <p className="text-xs font-medium uppercase tracking-wide text-muted">{label}</p>
-      <p className="mt-1 text-lg font-semibold text-ink-900">{formatDate(date)}</p>
-      <span className={`mt-2 inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${style}`}>
-        {dayText}
-      </span>
-    </div>
-  )
-}
 
 export default function BgDetails() {
-  const { id } = useParams()
-  const { push } = useToast()
 
-  const [bg, setBg] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [docs, setDocs] = useState([])
-  const [docsLoading, setDocsLoading] = useState(true)
-  const [activity, setActivity] = useState([])
+  const { id } =
+    useParams()
 
-  const [amendModalOpen, setAmendModalOpen] = useState(false)
-  const [amendForm, setAmendForm] = useState(emptyAmendment)
-  const [amendErrors, setAmendErrors] = useState({})
-  const [amendSaving, setAmendSaving] = useState(false)
 
-  const [lifecycleModalOpen, setLifecycleModalOpen] = useState(false)
-  const [lifecycleForm, setLifecycleForm] = useState(emptyLifecycle)
-  const [lifecycleErrors, setLifecycleErrors] = useState({})
-  const [lifecycleSaving, setLifecycleSaving] = useState(false)
-  const [lifecycleConfirm, setLifecycleConfirm] = useState(false)
+  const { push } =
+    useToast()
 
-  const [uploadForm, setUploadForm] = useState({ documentType: BG_DOCUMENT_TYPES[0], remarks: '', file: null })
-  const [uploading, setUploading] = useState(false)
-  const [deleteDocTarget, setDeleteDocTarget] = useState(null)
-  const [deletingDoc, setDeletingDoc] = useState(false)
 
-  const loadBg = useCallback(async () => {
-    setLoading(true)
-    try {
-      setBg(await bgApi.getById(id))
-    } catch {
-      push('Could not load this Bank Guarantee.', 'error')
-    } finally {
-      setLoading(false)
+  // =========================================================
+  // BG
+  // =========================================================
+
+  const [
+    bg,
+    setBg,
+  ] =
+    useState(null)
+
+
+  const [
+    loading,
+    setLoading,
+  ] =
+    useState(true)
+
+
+  // =========================================================
+  // LINKED FD
+  // =========================================================
+
+  const [
+    linkedFds,
+    setLinkedFds,
+  ] =
+    useState([])
+
+
+  const [
+    linksLoading,
+    setLinksLoading,
+  ] =
+    useState(false)
+
+
+  const [
+    unlinkingId,
+    setUnlinkingId,
+  ] =
+    useState(null)
+
+
+  // =========================================================
+  // DOCUMENTS
+  // =========================================================
+
+  const [
+    documents,
+    setDocuments,
+  ] =
+    useState([])
+
+
+  const [
+    documentsLoading,
+    setDocumentsLoading,
+  ] =
+    useState(false)
+
+
+  const [
+    uploadForm,
+    setUploadForm,
+  ] =
+    useState({
+
+      documentType:
+        'Original BG',
+
+      remarks:
+        '',
+
+      file:
+        null,
+    })
+
+
+  const [
+    uploading,
+    setUploading,
+  ] =
+    useState(false)
+
+
+  const [
+    deletingDocumentId,
+    setDeletingDocumentId,
+  ] =
+    useState(null)
+
+
+  // =========================================================
+  // LOAD BG
+  // =========================================================
+
+  const loadBg =
+    async () => {
+
+      try {
+
+        const data =
+          await bgApi.getById(
+            id
+          )
+
+
+        setBg(
+          data
+        )
+
+
+      } catch (error) {
+
+        console.error(
+          'BG load error:',
+          error
+        )
+
+
+        push(
+          extractErrorMessage(
+            error,
+            'Could not load Bank Guarantee.'
+          ),
+          'error'
+        )
+      }
     }
-  }, [id, push])
 
-  const loadDocs = useCallback(async () => {
-    setDocsLoading(true)
-    try {
-      setDocs(await documentApi.list('BG', id))
-    } catch {
-      push('Could not load documents.', 'error')
-    } finally {
-      setDocsLoading(false)
+
+  // =========================================================
+  // LOAD LINKED FDS
+  // =========================================================
+
+  const loadLinkedFds =
+    async () => {
+
+      setLinksLoading(
+        true
+      )
+
+
+      try {
+
+        const data =
+          await fdLinkApi.getByBg(
+            id
+          )
+
+
+        console.log(
+          'BG LINKED FDS:',
+          data
+        )
+
+
+        setLinkedFds(
+          Array.isArray(data)
+            ? data
+            : []
+        )
+
+
+      } catch (error) {
+
+        console.error(
+          'Linked FD load error:',
+          error
+        )
+
+
+        setLinkedFds(
+          []
+        )
+
+
+      } finally {
+
+        setLinksLoading(
+          false
+        )
+      }
     }
-  }, [id, push])
 
-  const loadActivity = useCallback(async () => {
-    try {
-      setActivity(await auditApi.getForRecord('BG', id))
-    } catch {
-      // non-critical — silently ignore
+
+  // =========================================================
+  // LOAD DOCUMENTS
+  // =========================================================
+
+  const loadDocuments =
+    async () => {
+
+      setDocumentsLoading(
+        true
+      )
+
+
+      try {
+
+        const data =
+          await documentApi.list(
+            'BG',
+            id
+          )
+
+
+        setDocuments(
+          Array.isArray(data)
+            ? data
+            : []
+        )
+
+
+      } catch (error) {
+
+        console.error(
+          'Document load error:',
+          error
+        )
+
+
+      } finally {
+
+        setDocumentsLoading(
+          false
+        )
+      }
     }
-  }, [id])
 
-  useEffect(() => { loadBg() }, [loadBg])
-  useEffect(() => { loadDocs() }, [loadDocs])
-  useEffect(() => { loadActivity() }, [loadActivity])
 
-  // ---------- Amendments ----------
-  const openAmendModal = () => {
-    setAmendForm(emptyAmendment)
-    setAmendErrors({})
-    setAmendModalOpen(true)
+  // =========================================================
+  // INITIAL LOAD
+  // =========================================================
+
+  useEffect(
+    () => {
+
+      const load =
+        async () => {
+
+          setLoading(
+            true
+          )
+
+
+          try {
+
+            await Promise.all([
+              loadBg(),
+              loadLinkedFds(),
+              loadDocuments(),
+            ])
+
+
+          } finally {
+
+            setLoading(
+              false
+            )
+          }
+        }
+
+
+      load()
+
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    },
+    [id]
+  )
+
+
+  // =========================================================
+  // LINK SUMMARY
+  // =========================================================
+
+  const totalLinkedAmount =
+    useMemo(
+      () =>
+
+        linkedFds.reduce(
+          (
+            total,
+            link
+          ) =>
+
+            total +
+            safeNumber(
+              link.linkedAmount ??
+              link.amount
+            ),
+
+          0
+        ),
+
+      [
+        linkedFds,
+      ]
+    )
+
+
+  // =========================================================
+  // UNLINK FD
+  // =========================================================
+
+  const handleUnlinkFd =
+    async (
+      link
+    ) => {
+
+      const fdNumber =
+        link.fdNumber ??
+        link.fixedDepositNumber ??
+        link.fixedDeposit?.fdNumber ??
+        link.fixedDeposit?.fdNumber ??
+        'Fixed Deposit'
+
+
+      const linkedAmount =
+        safeNumber(
+          link.linkedAmount ??
+          link.amount
+        )
+
+
+      const confirmed =
+        window.confirm(
+          `Unlink ${fdNumber}?\n\n` +
+          `${formatCurrency(linkedAmount)} will be released from this Bank Guarantee.\n\n` +
+          `The Fixed Deposit itself will NOT be deleted.`
+        )
+
+
+      if (
+        !confirmed
+      ) {
+
+        return
+      }
+
+
+      setUnlinkingId(
+        link.id
+      )
+
+
+      try {
+
+        await fdLinkApi.remove(
+          link.id
+        )
+
+
+        push(
+          `${fdNumber} unlinked successfully.`
+        )
+
+
+        /*
+         * Refresh both.
+         *
+         * BG linked count
+         * +
+         * FD link list
+         */
+        await Promise.all([
+          loadLinkedFds(),
+          loadBg(),
+        ])
+
+
+      } catch (error) {
+
+        console.error(
+          'FD unlink error:',
+          error
+        )
+
+
+        push(
+          extractErrorMessage(
+            error,
+            'Could not unlink Fixed Deposit.'
+          ),
+          'error'
+        )
+
+
+      } finally {
+
+        setUnlinkingId(
+          null
+        )
+      }
+    }
+
+
+  // =========================================================
+  // UPLOAD DOCUMENT
+  // =========================================================
+
+  const handleUpload =
+    async () => {
+
+      if (
+        !uploadForm.file
+      ) {
+
+        push(
+          'Please choose a file.',
+          'error'
+        )
+
+        return
+      }
+
+
+      if (
+        !uploadForm.documentType
+      ) {
+
+        push(
+          'Please select document type.',
+          'error'
+        )
+
+        return
+      }
+
+
+      setUploading(
+        true
+      )
+
+
+      try {
+
+        await documentApi.upload(
+
+          'BG',
+
+          id,
+
+          uploadForm.documentType,
+
+          uploadForm.file,
+
+          uploadForm.remarks
+        )
+
+
+        push(
+          'Document uploaded successfully.'
+        )
+
+
+        setUploadForm({
+
+          documentType:
+            'Original BG',
+
+          remarks:
+            '',
+
+          file:
+            null,
+        })
+
+
+        const fileInput =
+          window.document.getElementById(
+            'bg-document-file'
+          )
+
+
+        if (
+          fileInput
+        ) {
+
+          fileInput.value =
+            ''
+        }
+
+
+        await loadDocuments()
+
+
+      } catch (error) {
+
+        console.error(
+          'Document upload error:',
+          error
+        )
+
+
+        push(
+          extractErrorMessage(
+            error,
+            'Could not upload document.'
+          ),
+          'error'
+        )
+
+
+      } finally {
+
+        setUploading(
+          false
+        )
+      }
+    }
+
+
+  // =========================================================
+  // VIEW DOCUMENT
+  // =========================================================
+
+  const handleView =
+    async (
+      doc
+    ) => {
+
+      try {
+
+        const response =
+          await documentApi.view(
+            doc.id
+          )
+
+
+        const contentType =
+          response.contentType ||
+          doc.fileType ||
+          'application/octet-stream'
+
+
+        const fileBlob =
+          new Blob(
+            [
+              response.blob,
+            ],
+            {
+              type:
+                contentType,
+            }
+          )
+
+
+        const url =
+          window.URL.createObjectURL(
+            fileBlob
+          )
+
+
+        const newWindow =
+          window.open(
+            url,
+            '_blank',
+            'noopener,noreferrer'
+          )
+
+
+        if (
+          !newWindow
+        ) {
+
+          push(
+            'Popup was blocked. Please allow popups to view the document.',
+            'error'
+          )
+
+
+          window.URL.revokeObjectURL(
+            url
+          )
+
+          return
+        }
+
+
+        setTimeout(
+          () => {
+
+            window.URL.revokeObjectURL(
+              url
+            )
+
+          },
+          60000
+        )
+
+
+      } catch (error) {
+
+        push(
+          extractErrorMessage(
+            error,
+            'Could not open document.'
+          ),
+          'error'
+        )
+      }
+    }
+
+
+  // =========================================================
+  // DOWNLOAD DOCUMENT
+  // =========================================================
+
+  const handleDownload =
+    async (
+      doc
+    ) => {
+
+      try {
+
+        const response =
+          await documentApi.download(
+            doc.id
+          )
+
+
+        const contentType =
+          response.contentType ||
+          doc.fileType ||
+          'application/octet-stream'
+
+
+        const fileBlob =
+          new Blob(
+            [
+              response.blob,
+            ],
+            {
+              type:
+                contentType,
+            }
+          )
+
+
+        const url =
+          window.URL.createObjectURL(
+            fileBlob
+          )
+
+
+        const anchor =
+          window.document.createElement(
+            'a'
+          )
+
+
+        anchor.href =
+          url
+
+
+        anchor.download =
+          doc.fileName ||
+          'document'
+
+
+        window.document.body.appendChild(
+          anchor
+        )
+
+
+        anchor.click()
+
+
+        anchor.remove()
+
+
+        window.URL.revokeObjectURL(
+          url
+        )
+
+
+      } catch (error) {
+
+        push(
+          extractErrorMessage(
+            error,
+            'Could not download document.'
+          ),
+          'error'
+        )
+      }
+    }
+
+
+  // =========================================================
+  // DELETE DOCUMENT
+  // =========================================================
+
+  const handleDeleteDocument =
+    async (
+      doc
+    ) => {
+
+      const confirmed =
+        window.confirm(
+          `Delete "${doc.fileName}"?`
+        )
+
+
+      if (
+        !confirmed
+      ) {
+
+        return
+      }
+
+
+      setDeletingDocumentId(
+        doc.id
+      )
+
+
+      try {
+
+        await documentApi.remove(
+          doc.id
+        )
+
+
+        push(
+          'Document deleted.'
+        )
+
+
+        await loadDocuments()
+
+
+      } catch (error) {
+
+        push(
+          extractErrorMessage(
+            error,
+            'Could not delete document.'
+          ),
+          'error'
+        )
+
+
+      } finally {
+
+        setDeletingDocumentId(
+          null
+        )
+      }
+    }
+
+
+  // =========================================================
+  // PAGE STATES
+  // =========================================================
+
+  if (
+    loading
+  ) {
+
+    return (
+      <Loader />
+    )
   }
 
-  const validateAmend = () => {
-    const errs = {}
-    if (!amendForm.amendmentDate) errs.amendmentDate = 'Required'
-    if (!amendForm.amendmentType) errs.amendmentType = 'Required'
-    setAmendErrors(errs)
-    return Object.keys(errs).length === 0
+
+  if (
+    !bg
+  ) {
+
+    return (
+
+      <div className="rounded-xl border border-border bg-white p-6 text-sm text-muted">
+
+        Bank Guarantee not found.
+
+      </div>
+    )
   }
 
-  const handleAddAmendment = async (e) => {
-    e.preventDefault()
-    if (!validateAmend()) return
-    setAmendSaving(true)
-    const payload = {
-      amendmentDate: amendForm.amendmentDate,
-      amendmentType: amendForm.amendmentType,
-      newBgAmount: amendForm.newBgAmount === '' ? null : Number(amendForm.newBgAmount),
-      newExpiryDate: amendForm.newExpiryDate || null,
-      newClaimExpiryDate: amendForm.newClaimExpiryDate || null,
-      reason: amendForm.reason || null,
-      remarks: amendForm.remarks || null,
-    }
-    try {
-      await bgAmendmentApi.add(id, payload)
-      push('Amendment recorded.')
-      setAmendModalOpen(false)
-      loadBg()
-      loadActivity()
-    } catch (err) {
-      push(extractErrorMessage(err, 'Could not save the amendment.'), 'error')
-    } finally {
-      setAmendSaving(false)
-    }
-  }
 
-  // ---------- Lifecycle ----------
-  const openLifecycle = (targetStatus) => {
-    setLifecycleForm({ ...emptyLifecycle, targetStatus })
-    setLifecycleErrors({})
-    setLifecycleModalOpen(true)
-  }
-
-  const validateLifecycle = () => {
-    const errs = {}
-    if (lifecycleForm.targetStatus === 'RELEASE_REQUESTED' && !lifecycleForm.releaseRequestDate) errs.releaseRequestDate = 'Required'
-    if (lifecycleForm.targetStatus === 'RELEASED' && !lifecycleForm.releaseDate) errs.releaseDate = 'Required'
-    if (lifecycleForm.targetStatus === 'CLOSED' && !lifecycleForm.closureDate) errs.closureDate = 'Required'
-    setLifecycleErrors(errs)
-    return Object.keys(errs).length === 0
-  }
-
-  const submitLifecycle = async () => {
-    if (!validateLifecycle()) return
-    setLifecycleSaving(true)
-    const payload = {
-      targetStatus: lifecycleForm.targetStatus,
-      releaseRequestDate: lifecycleForm.releaseRequestDate || null,
-      releaseDate: lifecycleForm.releaseDate || null,
-      releaseReferenceNumber: lifecycleForm.releaseReferenceNumber || null,
-      originalBgReceivedBack: lifecycleForm.originalBgReceivedBack === '' ? null : lifecycleForm.originalBgReceivedBack === 'true',
-      releaseRemarks: lifecycleForm.releaseRemarks || null,
-      closureDate: lifecycleForm.closureDate || null,
-      closureRemarks: lifecycleForm.closureRemarks || null,
-    }
-    try {
-      await bgApi.lifecycle(id, payload)
-      push('BG status updated.')
-      setLifecycleModalOpen(false)
-      setLifecycleConfirm(false)
-      loadBg()
-      loadActivity()
-    } catch (err) {
-      push(extractErrorMessage(err, 'Could not update the BG status.'), 'error')
-    } finally {
-      setLifecycleSaving(false)
-    }
-  }
-
-  // ---------- Documents ----------
-  const handleUpload = async (e) => {
-    e.preventDefault()
-    if (!uploadForm.file) {
-      push('Choose a file to upload.', 'error')
-      return
-    }
-    setUploading(true)
-    try {
-      await documentApi.upload('BG', id, uploadForm.documentType, uploadForm.file, uploadForm.remarks)
-      push('Document uploaded.')
-      setUploadForm({ documentType: BG_DOCUMENT_TYPES[0], remarks: '', file: null })
-      loadDocs()
-      loadActivity()
-    } catch (err) {
-      push(extractErrorMessage(err, 'Could not upload document.'), 'error')
-    } finally {
-      setUploading(false)
-    }
-  }
-
-  const handleDownload = async (doc) => {
-    try {
-      const blob = await documentApi.download(doc.id)
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = doc.fileName
-      document.body.appendChild(a)
-      a.click()
-      a.remove()
-      window.URL.revokeObjectURL(url)
-    } catch {
-      push('Could not download document.', 'error')
-    }
-  }
-
-  const handleDeleteDoc = async () => {
-    setDeletingDoc(true)
-    try {
-      await documentApi.remove(deleteDocTarget.id)
-      push('Document deleted.')
-      setDeleteDocTarget(null)
-      loadDocs()
-      loadActivity()
-    } catch (err) {
-      push(extractErrorMessage(err, 'Could not delete document.'), 'error')
-    } finally {
-      setDeletingDoc(false)
-    }
-  }
-
-  if (loading) return <Loader />
-  if (!bg) return null
+  // =========================================================
+  // PAGE
+  // =========================================================
 
   return (
+
     <div>
-      <Link to="/bg" className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted hover:text-ink-900">
-        <ArrowLeft size={15} /> Back to Bank Guarantees
-      </Link>
+
+      {/* ======================================================
+          HEADER
+      ====================================================== */}
 
       <PageHeader
+
         eyebrow="Bank Guarantee"
-        title={bg.bgNo}
-        description={`${bg.clientName}${bg.siteProject ? ' — ' + bg.siteProject : ''}`}
+
+        title={
+          bg.bgNo
+        }
+
+        description={
+          `${bg.groupCompanyName || 'Unassigned'} · ${bg.issuingBankName || '—'}`
+        }
+
         actions={
-          <>
-            <StatusBadge status={bg.status} />
-            {bg.status !== 'RELEASED' && bg.status !== 'CLOSED' && (
-              <Button variant="outline" onClick={() => openLifecycle('RELEASE_REQUESTED')}>
-                <ShieldCheck size={16} /> Release / Close BG
-              </Button>
-            )}
-          </>
+
+          <Link
+            to="/bg"
+          >
+
+            <Button
+              variant="outline"
+            >
+
+              <ArrowLeft
+                size={16}
+              />
+
+              Back
+
+            </Button>
+
+          </Link>
         }
       />
 
-      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-xl2 border border-border bg-white p-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted">BG Amount</p>
-          <p className="mt-1 text-lg font-semibold text-ink-900">{formatCurrency(bg.bgAmount)}</p>
-        </div>
-        <div className="rounded-xl2 border border-border bg-white p-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted">Issuing Bank</p>
-          <p className="mt-1 text-lg font-semibold text-ink-900">{bg.issuingBankName}</p>
-        </div>
-        <ExpiryPill label="BG Expiry" date={bg.expiryDate} days={bg.daysUntilExpiry} indicator={bg.expiryIndicator} />
-        <ExpiryPill label="Claim Expiry" date={bg.claimExpiryDate} days={bg.daysUntilClaimExpiry} indicator={bg.claimExpiryIndicator} />
-      </div>
 
-      {(bg.releaseRequestDate || bg.releaseDate || bg.closureDate) && (
-        <div className="mb-6 rounded-xl2 border border-border bg-white p-4">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted">Release / Closure</p>
-          <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-3">
-            {bg.releaseRequestDate && <div><span className="text-muted">Release Requested: </span>{formatDate(bg.releaseRequestDate)}</div>}
-            {bg.releaseDate && <div><span className="text-muted">Released: </span>{formatDate(bg.releaseDate)}</div>}
-            {bg.releaseReferenceNumber && <div><span className="text-muted">Reference No.: </span>{bg.releaseReferenceNumber}</div>}
-            {bg.originalBgReceivedBack !== null && bg.originalBgReceivedBack !== undefined && (
-              <div><span className="text-muted">Original BG Received Back: </span>{bg.originalBgReceivedBack ? 'Yes' : 'No'}</div>
-            )}
-            {bg.closureDate && <div><span className="text-muted">Closed: </span>{formatDate(bg.closureDate)}</div>}
-            {bg.releaseRemarks && <div className="sm:col-span-3"><span className="text-muted">Release Remarks: </span>{bg.releaseRemarks}</div>}
-            {bg.closureRemarks && <div className="sm:col-span-3"><span className="text-muted">Closure Remarks: </span>{bg.closureRemarks}</div>}
+      {/* ======================================================
+          SUMMARY
+      ====================================================== */}
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
+
+        <Summary
+
+          label="BG Amount"
+
+          value={
+            formatCurrency(
+              bg.bgAmount
+            )
+          }
+        />
+
+
+        <Summary
+
+          label="Client"
+
+          value={
+            bg.clientName ||
+            '—'
+          }
+        />
+
+
+        <Summary
+
+          label="Expiry"
+
+          value={
+            formatDate(
+              bg.expiryDate
+            )
+          }
+        />
+
+
+        <Summary
+
+          label="FD Margin Linked"
+
+          value={
+            formatCurrency(
+              totalLinkedAmount
+            )
+          }
+
+          highlight={
+            totalLinkedAmount > 0
+          }
+        />
+
+
+        <Card>
+
+          <p className="text-xs uppercase tracking-wide text-muted">
+            Status
+          </p>
+
+
+          <div className="mt-3">
+
+            <StatusBadge
+              status={
+                bg.status
+              }
+            />
+
           </div>
-        </div>
-      )}
 
-      <div className="mb-6 rounded-xl2 border border-border bg-white p-5">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="font-display text-lg font-semibold text-ink-900">Amendments</h2>
-          <Button variant="accent" size="sm" onClick={openAmendModal}><Plus size={15} /> Add Amendment</Button>
-        </div>
+        </Card>
 
-        <ol className="space-y-4 border-l border-border pl-4">
-          <li>
-            <p className="text-sm font-medium text-ink-900">Original BG</p>
-            <p className="text-xs text-muted">
-              Amount: {formatCurrency(bg.amendments?.[0]?.previousBgAmount ?? bg.bgAmount)} · Expiry: {formatDate(bg.amendments?.[0]?.previousExpiryDate ?? bg.expiryDate)}
-            </p>
-          </li>
-          {bg.amendments?.map((a) => (
-            <li key={a.id}>
-              <p className="text-sm font-medium text-ink-900">Amendment #{a.amendmentNumber} — {AMENDMENT_TYPES[a.amendmentType]}</p>
-              <p className="text-xs text-muted">{formatDate(a.amendmentDate)}</p>
-              <div className="mt-1 space-y-0.5 text-xs text-ink-900">
-                {a.previousBgAmount !== a.newBgAmount && (
-                  <p>Amount: {formatCurrency(a.previousBgAmount)} → {formatCurrency(a.newBgAmount)}</p>
-                )}
-                {a.previousExpiryDate !== a.newExpiryDate && (
-                  <p>Expiry: {formatDate(a.previousExpiryDate)} → {formatDate(a.newExpiryDate)}</p>
-                )}
-                {a.previousClaimExpiryDate !== a.newClaimExpiryDate && (
-                  <p>Claim Expiry: {formatDate(a.previousClaimExpiryDate)} → {formatDate(a.newClaimExpiryDate)}</p>
-                )}
-                {a.reason && <p className="text-muted">Reason: {a.reason}</p>}
-                {a.remarks && <p className="text-muted">Remarks: {a.remarks}</p>}
-              </div>
-            </li>
-          ))}
-          {(!bg.amendments || bg.amendments.length === 0) && (
-            <li className="text-xs text-muted">No amendments recorded yet.</li>
-          )}
-        </ol>
       </div>
 
-      <div className="mb-6 rounded-xl2 border border-border bg-white p-5">
-        <h2 className="mb-4 font-display text-lg font-semibold text-ink-900">Documents</h2>
 
-        <form onSubmit={handleUpload} className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-4">
-          <Select label="Document Type" value={uploadForm.documentType}
-            onChange={(e) => setUploadForm({ ...uploadForm, documentType: e.target.value })}>
-            {BG_DOCUMENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-          </Select>
-          <Input label="Remarks" value={uploadForm.remarks}
-            onChange={(e) => setUploadForm({ ...uploadForm, remarks: e.target.value })} />
-          <label className="block">
-            <span className="mb-1.5 block text-xs font-medium text-ink-900">File</span>
-            <input type="file" onChange={(e) => setUploadForm({ ...uploadForm, file: e.target.files?.[0] || null })}
-              className="w-full rounded-lg border border-border bg-white px-3 py-1.5 text-sm text-ink-900" />
-          </label>
-          <div className="flex items-end">
-            <Button type="submit" variant="accent" disabled={uploading} className="w-full">
-              <Upload size={15} /> {uploading ? 'Uploading…' : 'Upload'}
+      {/* ======================================================
+          BASIC DETAILS
+      ====================================================== */}
+
+      <Card className="mt-6">
+
+        <h2 className="font-display text-xl font-semibold text-ink-900">
+          Bank Guarantee Details
+        </h2>
+
+
+        <div className="mt-5 grid grid-cols-1 gap-x-8 gap-y-5 md:grid-cols-2 xl:grid-cols-4">
+
+          <Info
+
+            label="Group Company"
+
+            value={
+              bg.groupCompanyName ||
+              'Unassigned'
+            }
+          />
+
+
+          <Info
+
+            label="Issuing Bank"
+
+            value={
+              bg.issuingBankName ||
+              '—'
+            }
+          />
+
+
+          <Info
+
+            label="Client"
+
+            value={
+              bg.clientName ||
+              '—'
+            }
+          />
+
+
+          <Info
+
+            label="Site / Project"
+
+            value={
+              bg.siteProject ||
+              '—'
+            }
+          />
+
+
+          <Info
+
+            label="Guarantee Type"
+
+            value={
+              bg.guaranteeTypeCode ||
+              '—'
+            }
+          />
+
+
+          <Info
+
+            label="Issue Date"
+
+            value={
+              formatDate(
+                bg.issueDate
+              )
+            }
+          />
+
+
+          <Info
+
+            label="Expiry Date"
+
+            value={
+              formatDate(
+                bg.expiryDate
+              )
+            }
+          />
+
+
+          <Info
+
+            label="Claim Expiry"
+
+            value={
+              formatDate(
+                bg.claimExpiryDate
+              )
+            }
+          />
+
+
+          <Info
+
+            label="Interest Rate"
+
+            value={
+              bg.interestRate != null
+                ? `${bg.interestRate}%`
+                : '—'
+            }
+          />
+
+
+          <Info
+
+            label="Bank Charges"
+
+            value={
+              formatCurrency(
+                bg.bankCharges ||
+                0
+              )
+            }
+          />
+
+
+          <Info
+
+            label="Duration / Claim Period"
+
+            value={
+              bg.durationClaimPeriod ||
+              '—'
+            }
+          />
+
+        </div>
+
+      </Card>
+
+
+      {/* ======================================================
+          LINKED FIXED DEPOSITS
+      ====================================================== */}
+
+      <Card className="mt-6">
+
+        <div className="flex flex-wrap items-start justify-between gap-4">
+
+          <div className="flex items-start gap-3">
+
+            <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-bg-50 text-bg-700">
+
+              <Landmark
+                size={18}
+              />
+
+            </span>
+
+
+            <div>
+
+              <h2 className="font-display text-xl font-semibold text-ink-900">
+                Linked Fixed Deposits
+              </h2>
+
+
+              <p className="mt-1 text-sm text-muted">
+                Fixed Deposits pledged as margin against this Bank Guarantee.
+              </p>
+
+            </div>
+
+          </div>
+
+
+          <Link
+            to="/fd-linking"
+          >
+
+            <Button
+              type="button"
+              variant="outline"
+            >
+
+              <Link2
+                size={16}
+              />
+
+              Manage Links
+
             </Button>
-          </div>
-        </form>
 
-        {docsLoading ? <Loader /> : docs.length === 0 ? (
-          <p className="text-sm text-muted">No documents uploaded yet.</p>
-        ) : (
-          <div className="divide-y divide-border">
-            {docs.map((d) => (
-              <div key={d.id} className="flex items-center justify-between gap-3 py-3">
-                <div>
-                  <p className="text-sm font-medium text-ink-900">{d.fileName}</p>
-                  <p className="text-xs text-muted">
-                    {d.documentType} · {(d.fileSize / 1024).toFixed(0)} KB · Uploaded {formatDate(d.uploadedAt)}
-                    {d.uploadedBy ? ` by ${d.uploadedBy}` : ''}
-                  </p>
-                  {d.remarks && <p className="text-xs text-muted">{d.remarks}</p>}
-                </div>
-                <div className="flex gap-1">
-                  <button onClick={() => handleDownload(d)} className="rounded-lg p-2 text-muted hover:bg-ink-50 hover:text-ink-900" aria-label="Download">
-                    <Download size={15} />
-                  </button>
-                  <button onClick={() => setDeleteDocTarget(d)} className="rounded-lg p-2 text-muted hover:bg-danger-50 hover:text-danger" aria-label="Delete">
-                    <Trash2 size={15} />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+          </Link>
 
-      <div className="rounded-xl2 border border-border bg-white p-5">
-        <h2 className="mb-4 font-display text-lg font-semibold text-ink-900">Activity History</h2>
-        {activity.length === 0 ? (
-          <p className="text-sm text-muted">No activity recorded yet.</p>
-        ) : (
-          <div className="divide-y divide-border">
-            {activity.map((l) => (
-              <div key={l.id} className="flex items-start gap-3 py-3">
-                <span className="mt-0.5 rounded-lg bg-ink-50 p-1.5 text-muted"><History size={14} /></span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm text-ink-900">{AUDIT_ACTION_LABELS[l.actionType] || l.actionType}</p>
-                  {l.description && <p className="text-xs text-muted">{l.description}</p>}
-                </div>
-                <div className="shrink-0 text-right">
-                  <p className="text-xs text-ink-900">{l.username}</p>
-                  <p className="text-xs text-muted">{formatDate(l.createdAt)}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <Modal open={amendModalOpen} onClose={() => setAmendModalOpen(false)} size="lg" title="Add Amendment"
-        footer={<>
-          <Button variant="outline" onClick={() => setAmendModalOpen(false)}>Cancel</Button>
-          <Button variant="primary" onClick={handleAddAmendment} disabled={amendSaving}>{amendSaving ? 'Saving…' : 'Save Amendment'}</Button>
-        </>}>
-        <form onSubmit={handleAddAmendment} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Input label="Amendment Date" type="date" required error={amendErrors.amendmentDate}
-            value={amendForm.amendmentDate} onChange={(e) => setAmendForm({ ...amendForm, amendmentDate: e.target.value })} />
-          <Select label="Amendment Type" required error={amendErrors.amendmentType}
-            value={amendForm.amendmentType} onChange={(e) => setAmendForm({ ...amendForm, amendmentType: e.target.value })}>
-            {Object.entries(AMENDMENT_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-          </Select>
-          <Input label="New BG Amount" type="number" step="0.01" hint="Leave blank if unchanged"
-            value={amendForm.newBgAmount} onChange={(e) => setAmendForm({ ...amendForm, newBgAmount: e.target.value })} />
-          <Input label="New Expiry Date" type="date" hint="Leave blank if unchanged"
-            value={amendForm.newExpiryDate} onChange={(e) => setAmendForm({ ...amendForm, newExpiryDate: e.target.value })} />
-          <Input label="New Claim Expiry Date" type="date" hint="Leave blank if unchanged"
-            value={amendForm.newClaimExpiryDate} onChange={(e) => setAmendForm({ ...amendForm, newClaimExpiryDate: e.target.value })} />
-          <Textarea label="Reason" className="sm:col-span-2"
-            value={amendForm.reason} onChange={(e) => setAmendForm({ ...amendForm, reason: e.target.value })} />
-          <Textarea label="Remarks" className="sm:col-span-2"
-            value={amendForm.remarks} onChange={(e) => setAmendForm({ ...amendForm, remarks: e.target.value })} />
-        </form>
-      </Modal>
-
-      <Modal open={lifecycleModalOpen} onClose={() => setLifecycleModalOpen(false)} size="md" title="Release / Close BG"
-        footer={<>
-          <Button variant="outline" onClick={() => setLifecycleModalOpen(false)}>Cancel</Button>
-          <Button variant="primary" onClick={() => { if (validateLifecycle()) setLifecycleConfirm(true) }} disabled={lifecycleSaving}>
-            Continue
-          </Button>
-        </>}>
-        <div className="grid grid-cols-1 gap-4">
-          <Select label="New Status" value={lifecycleForm.targetStatus}
-            onChange={(e) => setLifecycleForm({ ...lifecycleForm, targetStatus: e.target.value })}>
-            {Object.entries(BG_LIFECYCLE_STATUS).map(([k, v]) => <option key={k} value={k}>{v.replaceAll('_', ' ')}</option>)}
-          </Select>
-
-          {lifecycleForm.targetStatus === 'RELEASE_REQUESTED' && (
-            <>
-              <Input label="Release Request Date" type="date" required error={lifecycleErrors.releaseRequestDate}
-                value={lifecycleForm.releaseRequestDate} onChange={(e) => setLifecycleForm({ ...lifecycleForm, releaseRequestDate: e.target.value })} />
-              <Textarea label="Remarks" value={lifecycleForm.releaseRemarks}
-                onChange={(e) => setLifecycleForm({ ...lifecycleForm, releaseRemarks: e.target.value })} />
-            </>
-          )}
-
-          {lifecycleForm.targetStatus === 'RELEASED' && (
-            <>
-              <Input label="Release Date" type="date" required error={lifecycleErrors.releaseDate}
-                value={lifecycleForm.releaseDate} onChange={(e) => setLifecycleForm({ ...lifecycleForm, releaseDate: e.target.value })} />
-              <Input label="Release Reference Number" value={lifecycleForm.releaseReferenceNumber}
-                onChange={(e) => setLifecycleForm({ ...lifecycleForm, releaseReferenceNumber: e.target.value })} />
-              <Select label="Original BG Received Back" value={lifecycleForm.originalBgReceivedBack}
-                onChange={(e) => setLifecycleForm({ ...lifecycleForm, originalBgReceivedBack: e.target.value })}>
-                <option value="">Select…</option>
-                <option value="true">Yes</option>
-                <option value="false">No</option>
-              </Select>
-              <Textarea label="Remarks" value={lifecycleForm.releaseRemarks}
-                onChange={(e) => setLifecycleForm({ ...lifecycleForm, releaseRemarks: e.target.value })} />
-            </>
-          )}
-
-          {lifecycleForm.targetStatus === 'CLOSED' && (
-            <>
-              <Input label="Closure Date" type="date" required error={lifecycleErrors.closureDate}
-                value={lifecycleForm.closureDate} onChange={(e) => setLifecycleForm({ ...lifecycleForm, closureDate: e.target.value })} />
-              <Textarea label="Closure Remarks" value={lifecycleForm.closureRemarks}
-                onChange={(e) => setLifecycleForm({ ...lifecycleForm, closureRemarks: e.target.value })} />
-            </>
-          )}
         </div>
-      </Modal>
 
-      <ConfirmDialog
-        open={lifecycleConfirm}
-        title="Confirm status change"
-        message={`This will change the BG status to ${lifecycleForm.targetStatus?.replaceAll('_', ' ')}. Continue?`}
-        onCancel={() => setLifecycleConfirm(false)}
-        onConfirm={submitLifecycle}
-        loading={lifecycleSaving}
-      />
 
-      <ConfirmDialog
-        open={!!deleteDocTarget}
-        message="This will permanently delete this document. This can't be undone."
-        onCancel={() => setDeleteDocTarget(null)}
-        onConfirm={handleDeleteDoc}
-        loading={deletingDoc}
-      />
+        {
+          linksLoading
+
+            ? (
+
+                <div className="mt-6">
+
+                  <Loader />
+
+                </div>
+              )
+
+            : linkedFds.length ===
+              0
+
+              ? (
+
+                  <div className="mt-6 rounded-xl border border-dashed border-border px-5 py-10 text-center">
+
+                    <Link2
+                      size={26}
+                      className="mx-auto text-muted"
+                    />
+
+
+                    <p className="mt-3 text-sm font-medium text-ink-900">
+                      No Fixed Deposit linked
+                    </p>
+
+
+                    <p className="mt-1 text-xs text-muted">
+                      This Bank Guarantee currently has no Fixed Deposit pledged against it.
+                    </p>
+
+                  </div>
+                )
+
+              : (
+
+                  <>
+
+                    <div className="mt-6 overflow-x-auto">
+
+                      <table className="min-w-full text-sm">
+
+                        <thead>
+
+                          <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted">
+
+                            <th className="py-3 pr-5">
+                              FD Number
+                            </th>
+
+                            <th className="py-3 pr-5">
+                              Bank
+                            </th>
+
+                            <th className="py-3 pr-5">
+                              FD Amount
+                            </th>
+
+                            <th className="py-3 pr-5">
+                              Linked Amount
+                            </th>
+
+                            <th className="py-3 pr-5">
+                              Maturity
+                            </th>
+
+                            <th className="py-3 text-right">
+                              Action
+                            </th>
+
+                          </tr>
+
+                        </thead>
+
+
+                        <tbody>
+
+                          {
+                            linkedFds.map(
+                              (
+                                link
+                              ) => {
+
+                                const fdNumber =
+                                  getFdNumber(
+                                    link
+                                  )
+
+
+                                const bankName =
+                                  getFdBankName(
+                                    link
+                                  )
+
+
+                                const fdAmount =
+                                  getFdAmount(
+                                    link
+                                  )
+
+
+                                const linkedAmount =
+                                  getLinkedAmount(
+                                    link
+                                  )
+
+
+                                const maturityDate =
+                                  getFdMaturityDate(
+                                    link
+                                  )
+
+
+                                return (
+
+                                  <tr
+                                    key={
+                                      link.id
+                                    }
+                                    className="border-b border-border/70"
+                                  >
+
+                                    <td className="py-4 pr-5">
+
+                                      <p className="font-medium text-ink-900">
+                                        {fdNumber}
+                                      </p>
+
+                                    </td>
+
+
+                                    <td className="py-4 pr-5">
+                                      {bankName}
+                                    </td>
+
+
+                                    <td className="py-4 pr-5 num">
+                                      {
+                                        formatCurrency(
+                                          fdAmount
+                                        )
+                                      }
+                                    </td>
+
+
+                                    <td className="py-4 pr-5">
+
+                                      <span className="num font-semibold text-ink-900">
+
+                                        {
+                                          formatCurrency(
+                                            linkedAmount
+                                          )
+                                        }
+
+                                      </span>
+
+                                    </td>
+
+
+                                    <td className="py-4 pr-5">
+
+                                      {
+                                        maturityDate
+                                          ? formatDate(
+                                              maturityDate
+                                            )
+                                          : '—'
+                                      }
+
+                                    </td>
+
+
+                                    <td className="py-4 text-right">
+
+                                      <button
+
+                                        type="button"
+
+                                        disabled={
+                                          unlinkingId ===
+                                          link.id
+                                        }
+
+                                        onClick={
+                                          () =>
+                                            handleUnlinkFd(
+                                              link
+                                            )
+                                        }
+
+                                        className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+
+                                        title="Unlink Fixed Deposit"
+                                      >
+
+                                        <Unlink
+                                          size={15}
+                                        />
+
+                                        {
+                                          unlinkingId ===
+                                          link.id
+                                            ? 'Unlinking…'
+                                            : 'Unlink'
+                                        }
+
+                                      </button>
+
+                                    </td>
+
+                                  </tr>
+                                )
+                              }
+                            )
+                          }
+
+                        </tbody>
+
+                      </table>
+
+                    </div>
+
+
+                    <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+
+                      <p className="text-sm text-amber-900">
+
+                        <strong>
+                          Delete protection:
+                        </strong>
+
+                        {' '}
+
+                        This Bank Guarantee cannot be deleted while any Fixed Deposit is linked to it.
+
+                        {' '}
+
+                        Use
+
+                        {' '}
+
+                        <strong>
+                          Unlink
+                        </strong>
+
+                        {' '}
+
+                        first.
+
+                        {' '}
+
+                        Unlinking removes only the BG ↔ FD relationship; the Fixed Deposit itself remains safe.
+
+                      </p>
+
+                    </div>
+
+
+                    <div className="mt-4 flex justify-end">
+
+                      <div className="rounded-lg bg-ink-50 px-4 py-3">
+
+                        <p className="text-xs uppercase tracking-wide text-muted">
+                          Total FD Margin Linked
+                        </p>
+
+                        <p className="mt-1 num text-lg font-semibold text-ink-900">
+                          {
+                            formatCurrency(
+                              totalLinkedAmount
+                            )
+                          }
+                        </p>
+
+                      </div>
+
+                    </div>
+
+                  </>
+                )
+        }
+
+      </Card>
+
+
+      {/* ======================================================
+          AMENDMENTS
+      ====================================================== */}
+
+      <Card className="mt-6">
+
+        <div className="flex items-center justify-between gap-4">
+
+          <h2 className="font-display text-xl font-semibold text-ink-900">
+            Amendments
+          </h2>
+
+
+          <Button
+            type="button"
+            variant="accent"
+          >
+
+            <Plus
+              size={16}
+            />
+
+            Add Amendment
+
+          </Button>
+
+        </div>
+
+
+        <div className="mt-5 border-l border-border pl-5">
+
+          <p className="font-medium text-ink-900">
+            Original BG
+          </p>
+
+
+          <p className="mt-1 text-sm text-muted">
+
+            Amount:{' '}
+
+            {
+              formatCurrency(
+                bg.bgAmount
+              )
+            }
+
+            {' · '}
+
+            Expiry:{' '}
+
+            {
+              formatDate(
+                bg.expiryDate
+              )
+            }
+
+          </p>
+
+
+          {
+            !bg.amendments ||
+            bg.amendments.length ===
+            0
+
+              ? (
+
+                  <p className="mt-5 text-sm text-muted">
+                    No amendments recorded yet.
+                  </p>
+
+                )
+
+              : (
+
+                  <div className="mt-5 space-y-4">
+
+                    {
+                      bg.amendments.map(
+                        (
+                          amendment
+                        ) => (
+
+                          <div
+
+                            key={
+                              amendment.id
+                            }
+
+                            className="rounded-lg border border-border p-3"
+                          >
+
+                            <p className="text-sm font-medium text-ink-900">
+                              Amendment
+                            </p>
+
+
+                            <p className="mt-1 text-xs text-muted">
+
+                              {
+                                amendment.remarks ||
+                                '—'
+                              }
+
+                            </p>
+
+                          </div>
+                        )
+                      )
+                    }
+
+                  </div>
+                )
+          }
+
+        </div>
+
+      </Card>
+
+
+      {/* ======================================================
+          DOCUMENTS
+      ====================================================== */}
+
+      <Card className="mt-6">
+
+        <div className="flex items-center gap-2">
+
+          <FileText
+            size={20}
+            className="text-muted"
+          />
+
+          <h2 className="font-display text-xl font-semibold text-ink-900">
+            Documents
+          </h2>
+
+        </div>
+
+
+        {/* =====================================================
+            UPLOAD FORM
+        ===================================================== */}
+
+        <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-4">
+
+          <Select
+
+            label="Document Type"
+
+            value={
+              uploadForm.documentType
+            }
+
+            onChange={
+              (
+                event
+              ) =>
+
+                setUploadForm(
+                  (
+                    current
+                  ) => ({
+
+                    ...current,
+
+                    documentType:
+                      event.target.value,
+                  })
+                )
+            }
+          >
+
+            {
+              DOCUMENT_TYPES.map(
+                (
+                  type
+                ) => (
+
+                  <option
+                    key={
+                      type
+                    }
+                    value={
+                      type
+                    }
+                  >
+
+                    {type}
+
+                  </option>
+                )
+              )
+            }
+
+          </Select>
+
+
+          <Input
+
+            label="Remarks"
+
+            value={
+              uploadForm.remarks
+            }
+
+            onChange={
+              (
+                event
+              ) =>
+
+                setUploadForm(
+                  (
+                    current
+                  ) => ({
+
+                    ...current,
+
+                    remarks:
+                      event.target.value,
+                  })
+                )
+            }
+          />
+
+
+          <div>
+
+            <label className="mb-1.5 block text-sm font-medium text-ink-900">
+              File
+            </label>
+
+
+            <input
+
+              id="bg-document-file"
+
+              type="file"
+
+              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx"
+
+              onChange={
+                (
+                  event
+                ) =>
+
+                  setUploadForm(
+                    (
+                      current
+                    ) => ({
+
+                      ...current,
+
+                      file:
+                        event.target.files
+                          ?.[0] ||
+                        null,
+                    })
+                  )
+              }
+
+              className="block w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-ink-900"
+            />
+
+
+            <p className="mt-1 text-[11px] text-muted">
+              PDF, JPG, PNG, DOC, DOCX, XLS, XLSX · Max 10 MB
+            </p>
+
+          </div>
+
+
+          <div className="flex items-end">
+
+            <Button
+
+              type="button"
+
+              variant="accent"
+
+              className="w-full"
+
+              disabled={
+                uploading ||
+                !uploadForm.file
+              }
+
+              onClick={
+                handleUpload
+              }
+            >
+
+              <Upload
+                size={16}
+              />
+
+              {
+                uploading
+                  ? 'Uploading…'
+                  : 'Upload'
+              }
+
+            </Button>
+
+          </div>
+
+        </div>
+
+
+        {/* =====================================================
+            DOCUMENT LIST
+        ===================================================== */}
+
+        {
+          documentsLoading
+
+            ? (
+
+                <div className="mt-6">
+
+                  <Loader />
+
+                </div>
+
+              )
+
+            : documents.length ===
+              0
+
+              ? (
+
+                  <div className="mt-6 rounded-xl border border-dashed border-border px-4 py-8 text-center">
+
+                    <p className="text-sm text-muted">
+                      No documents uploaded yet.
+                    </p>
+
+                  </div>
+
+                )
+
+              : (
+
+                  <div className="mt-6 overflow-x-auto">
+
+                    <table className="min-w-full text-sm">
+
+                      <thead>
+
+                        <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted">
+
+                          <th className="py-3 pr-4">
+                            File
+                          </th>
+
+                          <th className="py-3 pr-4">
+                            Document Type
+                          </th>
+
+                          <th className="py-3 pr-4">
+                            Remarks
+                          </th>
+
+                          <th className="py-3 pr-4">
+                            Uploaded By
+                          </th>
+
+                          <th className="py-3 pr-4">
+                            Uploaded At
+                          </th>
+
+                          <th className="py-3 text-right">
+                            Actions
+                          </th>
+
+                        </tr>
+
+                      </thead>
+
+
+                      <tbody>
+
+                        {
+                          documents.map(
+                            (
+                              doc
+                            ) => (
+
+                              <tr
+
+                                key={
+                                  doc.id
+                                }
+
+                                className="border-b border-border/70"
+                              >
+
+                                <td className="py-3 pr-4">
+
+                                  <div>
+
+                                    <p className="font-medium text-ink-900">
+
+                                      {
+                                        doc.fileName
+                                      }
+
+                                    </p>
+
+
+                                    <p className="mt-1 text-xs text-muted">
+
+                                      {
+                                        formatFileSize(
+                                          doc.fileSize
+                                        )
+                                      }
+
+
+                                      {
+                                        doc.fileType
+                                          ? ` · ${doc.fileType}`
+                                          : ''
+                                      }
+
+                                    </p>
+
+                                  </div>
+
+                                </td>
+
+
+                                <td className="py-3 pr-4">
+
+                                  {
+                                    doc.documentType ||
+                                    '—'
+                                  }
+
+                                </td>
+
+
+                                <td className="py-3 pr-4">
+
+                                  {
+                                    doc.remarks ||
+                                    '—'
+                                  }
+
+                                </td>
+
+
+                                <td className="py-3 pr-4">
+
+                                  {
+                                    doc.uploadedBy ||
+                                    '—'
+                                  }
+
+                                </td>
+
+
+                                <td className="py-3 pr-4">
+
+                                  {
+                                    formatDateTime(
+                                      doc.uploadedAt
+                                    )
+                                  }
+
+                                </td>
+
+
+                                <td className="py-3">
+
+                                  <div className="flex justify-end gap-1">
+
+                                    {/* VIEW */}
+
+                                    <button
+
+                                      type="button"
+
+                                      onClick={
+                                        () =>
+                                          handleView(
+                                            doc
+                                          )
+                                      }
+
+                                      className="rounded-lg p-2 text-muted transition hover:bg-ink-50 hover:text-ink-900"
+
+                                      title="View document"
+                                    >
+
+                                      <Eye
+                                        size={16}
+                                      />
+
+                                    </button>
+
+
+                                    {/* DOWNLOAD */}
+
+                                    <button
+
+                                      type="button"
+
+                                      onClick={
+                                        () =>
+                                          handleDownload(
+                                            doc
+                                          )
+                                      }
+
+                                      className="rounded-lg p-2 text-muted transition hover:bg-ink-50 hover:text-ink-900"
+
+                                      title="Download document"
+                                    >
+
+                                      <Download
+                                        size={16}
+                                      />
+
+                                    </button>
+
+
+                                    {/* DELETE */}
+
+                                    <button
+
+                                      type="button"
+
+                                      disabled={
+                                        deletingDocumentId ===
+                                        doc.id
+                                      }
+
+                                      onClick={
+                                        () =>
+                                          handleDeleteDocument(
+                                            doc
+                                          )
+                                      }
+
+                                      className="rounded-lg p-2 text-muted transition hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
+
+                                      title="Delete document"
+                                    >
+
+                                      <Trash2
+                                        size={16}
+                                      />
+
+                                    </button>
+
+                                  </div>
+
+                                </td>
+
+                              </tr>
+                            )
+                          )
+                        }
+
+                      </tbody>
+
+                    </table>
+
+                  </div>
+                )
+        }
+
+      </Card>
+
+
+      {/* ======================================================
+          ACTIVITY HISTORY
+      ====================================================== */}
+
+      <Card className="mt-6">
+
+        <div className="flex items-center gap-2">
+
+          <History
+            size={19}
+            className="text-muted"
+          />
+
+          <h2 className="font-display text-xl font-semibold text-ink-900">
+            Activity History
+          </h2>
+
+        </div>
+
+
+        {
+          !bg.activityHistory ||
+          bg.activityHistory.length ===
+          0
+
+            ? (
+
+                <p className="mt-5 text-sm text-muted">
+                  No activity recorded yet.
+                </p>
+
+              )
+
+            : (
+
+                <div className="mt-5 divide-y divide-border">
+
+                  {
+                    bg.activityHistory.map(
+                      (
+                        activity,
+                        index
+                      ) => (
+
+                        <div
+
+                          key={
+                            activity.id ||
+                            index
+                          }
+
+                          className="flex items-start justify-between gap-4 py-4"
+                        >
+
+                          <div>
+
+                            <p className="text-sm font-medium text-ink-900">
+
+                              {
+                                activity.action ||
+                                activity.title ||
+                                'Updated'
+                              }
+
+                            </p>
+
+
+                            <p className="mt-1 text-xs text-muted">
+
+                              {
+                                activity.description ||
+                                activity.message ||
+                                '—'
+                              }
+
+                            </p>
+
+                          </div>
+
+
+                          <div className="text-right text-xs text-muted">
+
+                            <p>
+
+                              {
+                                activity.username ||
+                                activity.performedBy ||
+                                '—'
+                              }
+
+                            </p>
+
+
+                            <p className="mt-1">
+
+                              {
+                                formatDateTime(
+                                  activity.createdAt ||
+                                  activity.timestamp
+                                )
+                              }
+
+                            </p>
+
+                          </div>
+
+                        </div>
+                      )
+                    )
+                  }
+
+                </div>
+              )
+        }
+
+      </Card>
+
     </div>
+  )
+}
+
+
+// =========================================================
+// LINK RESPONSE HELPERS
+//
+// Backend DTO field name thoda alag hua to bhi UI chale.
+// =========================================================
+
+function getFdNumber(
+  link
+) {
+
+  return (
+    link.fdNumber ??
+    link.fixedDepositNumber ??
+    link.fixedDeposit?.fdNumber ??
+    link.fd?.fdNumber ??
+    '—'
+  )
+}
+
+
+function getFdBankName(
+  link
+) {
+
+  return (
+    link.bankName ??
+    link.fdBankName ??
+    link.fixedDeposit?.bankName ??
+    link.fixedDeposit?.bank?.bankName ??
+    link.fd?.bankName ??
+    '—'
+  )
+}
+
+
+function getFdAmount(
+  link
+) {
+
+  return safeNumber(
+
+    link.fdAmount ??
+    link.fixedDepositAmount ??
+    link.fixedDeposit?.fdAmount ??
+    link.fd?.fdAmount
+  )
+}
+
+
+function getLinkedAmount(
+  link
+) {
+
+  return safeNumber(
+    link.linkedAmount ??
+    link.amount
+  )
+}
+
+
+function getFdMaturityDate(
+  link
+) {
+
+  return (
+    link.fdMaturityDate ??
+    link.maturityDate ??
+    link.fixedDeposit?.fdMaturityDate ??
+    link.fd?.fdMaturityDate ??
+    null
+  )
+}
+
+
+// =========================================================
+// SUMMARY
+// =========================================================
+
+function Summary({
+  label,
+  value,
+  highlight = false,
+}) {
+
+  return (
+
+    <Card>
+
+      <p className="text-xs uppercase tracking-wide text-muted">
+        {label}
+      </p>
+
+
+      <p
+        className={`mt-2 text-lg font-semibold ${
+          highlight
+            ? 'text-bg-700'
+            : 'text-ink-900'
+        }`}
+      >
+
+        {value}
+
+      </p>
+
+    </Card>
+  )
+}
+
+
+// =========================================================
+// INFO
+// =========================================================
+
+function Info({
+  label,
+  value,
+}) {
+
+  return (
+
+    <div>
+
+      <p className="text-xs uppercase tracking-wide text-muted">
+        {label}
+      </p>
+
+
+      <p className="mt-1 text-sm font-medium text-ink-900">
+        {value}
+      </p>
+
+    </div>
+  )
+}
+
+
+// =========================================================
+// FILE SIZE
+// =========================================================
+
+function formatFileSize(
+  bytes
+) {
+
+  if (
+    bytes === null ||
+    bytes === undefined
+  ) {
+
+    return '—'
+  }
+
+
+  const size =
+    Number(
+      bytes
+    )
+
+
+  if (
+    !Number.isFinite(
+      size
+    )
+  ) {
+
+    return '—'
+  }
+
+
+  if (
+    size < 1024
+  ) {
+
+    return `${size} B`
+  }
+
+
+  if (
+    size <
+    1024 * 1024
+  ) {
+
+    return `${(
+      size /
+      1024
+    ).toFixed(1)} KB`
+  }
+
+
+  return `${(
+    size /
+    (
+      1024 *
+      1024
+    )
+  ).toFixed(1)} MB`
+}
+
+
+// =========================================================
+// DATE TIME
+// =========================================================
+
+function formatDateTime(
+  value
+) {
+
+  if (
+    !value
+  ) {
+
+    return '—'
+  }
+
+
+  const date =
+    new Date(
+      value
+    )
+
+
+  if (
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
+
+    return value
+  }
+
+
+  return date.toLocaleString(
+    'en-IN',
+    {
+
+      day:
+        '2-digit',
+
+      month:
+        'short',
+
+      year:
+        'numeric',
+
+      hour:
+        '2-digit',
+
+      minute:
+        '2-digit',
+    }
   )
 }
