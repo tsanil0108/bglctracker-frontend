@@ -54,11 +54,279 @@ import {
 } from '../../utils/formatters'
 
 
+// =========================================================
+// INLINE PRINT CSS
+// =========================================================
+
+const printStyles = `
+  @media screen {
+    .print-only {
+      display: none !important;
+    }
+  }
+
+  @media print {
+
+    @page {
+      size: A4 landscape;
+      margin: 10mm;
+    }
+
+    html,
+    body {
+      margin: 0 !important;
+      padding: 0 !important;
+      background: #ffffff !important;
+      width: 100% !important;
+      height: auto !important;
+    }
+
+    /*
+     * Hide entire application.
+     */
+    body * {
+      visibility: hidden !important;
+    }
+
+    /*
+     * Show report only.
+     */
+    .report-print-area,
+    .report-print-area * {
+      visibility: visible !important;
+    }
+
+    .report-print-area {
+      position: absolute !important;
+      left: 0 !important;
+      top: 0 !important;
+
+      width: 100% !important;
+      max-width: none !important;
+
+      margin: 0 !important;
+      padding: 0 !important;
+
+      border: none !important;
+      border-radius: 0 !important;
+
+      box-shadow: none !important;
+
+      background: #ffffff !important;
+
+      overflow: visible !important;
+    }
+
+    /*
+     * Remove anything which should never be printed.
+     */
+    .no-print {
+      display: none !important;
+    }
+
+    /*
+     * Header shown only in print.
+     */
+    .print-only {
+      display: block !important;
+    }
+
+    .print-report-header {
+      margin-bottom: 18px !important;
+      padding-bottom: 14px !important;
+
+      border-bottom: 2px solid #111827 !important;
+    }
+
+    .print-company-name {
+      margin: 0 !important;
+
+      font-family: Arial, Helvetica, sans-serif !important;
+      font-size: 17px !important;
+      font-weight: 700 !important;
+
+      text-transform: uppercase !important;
+
+      color: #111827 !important;
+    }
+
+    .print-report-title {
+      margin: 5px 0 0 !important;
+
+      font-family: Arial, Helvetica, sans-serif !important;
+      font-size: 23px !important;
+      font-weight: 700 !important;
+
+      color: #111827 !important;
+    }
+
+    .print-report-meta {
+      display: flex !important;
+      flex-wrap: wrap !important;
+
+      gap: 8px 24px !important;
+
+      margin-top: 11px !important;
+
+      font-family: Arial, Helvetica, sans-serif !important;
+      font-size: 10px !important;
+
+      color: #374151 !important;
+    }
+
+    .print-report-meta strong {
+      color: #111827 !important;
+    }
+
+    /*
+     * Remove regular card presentation.
+     */
+    .report-print-area {
+      border: none !important;
+      box-shadow: none !important;
+    }
+
+    /*
+     * Remove horizontal scrolling.
+     */
+    .report-print-area .overflow-x-auto {
+      overflow: visible !important;
+    }
+
+    /*
+     * TABLE
+     */
+    .report-print-area table {
+      width: 100% !important;
+
+      min-width: 0 !important;
+
+      border-collapse: collapse !important;
+      table-layout: auto !important;
+
+      font-family: Arial, Helvetica, sans-serif !important;
+      font-size: 9px !important;
+
+      color: #111827 !important;
+    }
+
+    .report-print-area thead {
+      display: table-header-group !important;
+    }
+
+    .report-print-area tfoot {
+      display: table-footer-group !important;
+    }
+
+    .report-print-area tr {
+      page-break-inside: avoid !important;
+      break-inside: avoid !important;
+    }
+
+    .report-print-area th {
+      padding: 7px 5px !important;
+
+      border: 1px solid #9ca3af !important;
+
+      background: #f3f4f6 !important;
+
+      font-size: 8.5px !important;
+      font-weight: 700 !important;
+
+      text-align: left !important;
+      text-transform: uppercase !important;
+
+      white-space: nowrap !important;
+
+      color: #111827 !important;
+    }
+
+    .report-print-area td {
+      padding: 7px 5px !important;
+
+      border: 1px solid #d1d5db !important;
+
+      vertical-align: top !important;
+
+      color: #111827 !important;
+    }
+
+    .report-print-area .num {
+      white-space: nowrap !important;
+    }
+
+    /*
+     * Override application text colors.
+     */
+    .report-print-area .text-muted,
+    .report-print-area .text-ink-900,
+    .report-print-area .text-bg-700 {
+      color: #111827 !important;
+    }
+
+    /*
+     * Bottom report summary.
+     */
+    .print-summary {
+      display: flex !important;
+      justify-content: flex-end !important;
+
+      margin-top: 16px !important;
+    }
+
+    .print-summary-box {
+      min-width: 260px !important;
+
+      padding: 10px 14px !important;
+
+      border: 1px solid #9ca3af !important;
+
+      font-family: Arial, Helvetica, sans-serif !important;
+
+      background: #ffffff !important;
+    }
+
+    .print-summary-label {
+      font-size: 9px !important;
+      font-weight: 600 !important;
+
+      text-transform: uppercase !important;
+
+      color: #4b5563 !important;
+    }
+
+    .print-summary-value {
+      margin-top: 4px !important;
+
+      font-size: 17px !important;
+      font-weight: 700 !important;
+
+      color: #111827 !important;
+    }
+
+    /*
+     * Prevent browser from printing link URLs.
+     */
+    a[href]::after {
+      content: none !important;
+    }
+  }
+`
+
+
+// =========================================================
+// REPORTS
+// =========================================================
+
 export default function Reports() {
 
   const { push } =
     useToast()
 
+
+  // =======================================================
+  // DATA
+  // =======================================================
 
   const [
     bgs,
@@ -88,6 +356,10 @@ export default function Reports() {
     useState([])
 
 
+  // =======================================================
+  // FILTERS
+  // =======================================================
+
   const [
     companyId,
     setCompanyId,
@@ -101,6 +373,10 @@ export default function Reports() {
   ] =
     useState('BG')
 
+
+  // =======================================================
+  // LOADING
+  // =======================================================
 
   const [
     loading,
@@ -123,6 +399,10 @@ export default function Reports() {
     useState(false)
 
 
+  // =======================================================
+  // INITIAL LOAD
+  // =======================================================
+
   useEffect(
     () => {
 
@@ -133,6 +413,10 @@ export default function Reports() {
     []
   )
 
+
+  // =======================================================
+  // LOAD
+  // =======================================================
 
   const loadAll =
     async () => {
@@ -151,32 +435,46 @@ export default function Reports() {
           companyData,
         ] =
           await Promise.all([
+
             bgApi.getAll(),
+
             lcApi.getAll(),
+
             fdApi.getAll(),
+
             groupCompanyApi.getAll(),
           ])
 
 
         setBgs(
-          bgData
+          Array.isArray(bgData)
+            ? bgData
+            : []
         )
+
 
         setLcs(
-          lcData
+          Array.isArray(lcData)
+            ? lcData
+            : []
         )
+
 
         setFds(
-          fdData
+          Array.isArray(fdData)
+            ? fdData
+            : []
         )
+
 
         setCompanies(
-          companyData
+          Array.isArray(companyData)
+            ? companyData
+            : []
         )
 
-      } catch (
-        err
-      ) {
+
+      } catch (err) {
 
         push(
           extractErrorMessage(
@@ -185,6 +483,7 @@ export default function Reports() {
           ),
           'error'
         )
+
 
       } finally {
 
@@ -195,12 +494,19 @@ export default function Reports() {
     }
 
 
+  // =======================================================
+  // SELECTED COMPANY
+  // =======================================================
+
   const selectedCompany =
     useMemo(
       () =>
 
         companies.find(
-          (company) =>
+          (
+            company
+          ) =>
+
             String(
               company.id
             ) ===
@@ -216,30 +522,35 @@ export default function Reports() {
     )
 
 
+  // =======================================================
+  // FILTER REPORT ROWS
+  // =======================================================
+
   const rows =
     useMemo(
       () => {
 
-        let source = []
+        let source =
+          []
 
 
         if (
-          reportType === 'BG'
+          reportType ===
+          'BG'
         ) {
 
           source =
             bgs
-        }
 
-        else if (
-          reportType === 'LC'
+        } else if (
+          reportType ===
+          'LC'
         ) {
 
           source =
             lcs
-        }
 
-        else {
+        } else {
 
           source =
             fds
@@ -255,7 +566,10 @@ export default function Reports() {
 
 
         return source.filter(
-          (row) =>
+          (
+            row
+          ) =>
+
             String(
               row.groupCompanyId
             ) ===
@@ -263,8 +577,8 @@ export default function Reports() {
               companyId
             )
         )
-      },
 
+      },
       [
         reportType,
         companyId,
@@ -274,6 +588,10 @@ export default function Reports() {
       ]
     )
 
+
+  // =======================================================
+  // TOTAL AMOUNT
+  // =======================================================
 
   const totalAmount =
     useMemo(
@@ -334,6 +652,10 @@ export default function Reports() {
     )
 
 
+  // =======================================================
+  // REPORT TITLE
+  // =======================================================
+
   const reportTitle =
     useMemo(
       () => {
@@ -364,6 +686,47 @@ export default function Reports() {
       ]
     )
 
+
+  // =======================================================
+  // REPORT COMPANY
+  // =======================================================
+
+  const reportCompanyName =
+    selectedCompany?.companyName ||
+    'All Group Companies'
+
+
+  // =======================================================
+  // GENERATED DATE
+  // =======================================================
+
+  const generatedDate =
+    new Intl.DateTimeFormat(
+      'en-IN',
+      {
+        day:
+          '2-digit',
+
+        month:
+          'short',
+
+        year:
+          'numeric',
+
+        hour:
+          '2-digit',
+
+        minute:
+          '2-digit',
+      }
+    ).format(
+      new Date()
+    )
+
+
+  // =======================================================
+  // EXCEL / CSV
+  // =======================================================
 
   const handleDownload =
     async (
@@ -505,9 +868,8 @@ export default function Reports() {
           } report exported.`
         )
 
-      } catch (
-        err
-      ) {
+
+      } catch (err) {
 
         push(
           extractErrorMessage(
@@ -517,11 +879,13 @@ export default function Reports() {
           'error'
         )
 
+
       } finally {
 
         setExportingExcel(
           false
         )
+
 
         setExportingCsv(
           false
@@ -530,12 +894,31 @@ export default function Reports() {
     }
 
 
+  // =======================================================
+  // PRINT / PDF
+  // =======================================================
+
   const handlePrint =
     () => {
+
+      /*
+       * Browser print dialog remains useful because
+       * user can select:
+       *
+       * Printer
+       * or
+       * Save as PDF
+       *
+       * CSS ensures ONLY .report-print-area is printed.
+       */
 
       window.print()
     }
 
+
+  // =======================================================
+  // LOADING
+  // =======================================================
 
   if (
     loading
@@ -547,293 +930,464 @@ export default function Reports() {
   }
 
 
+  // =======================================================
+  // PAGE
+  // =======================================================
+
   return (
 
-    <div>
+    <>
 
-      <PageHeader
+      {/* INLINE PRINT CSS */}
 
-        eyebrow="Reporting"
-
-        title="Reports"
-
-        description="Company-wise BG, LC and Fixed Deposit registers with Excel, CSV and print export."
-
-        actions={
-
-          <div className="flex flex-wrap gap-2">
-
-            <Button
-              type="button"
-              variant="outline"
-              disabled={
-                exportingExcel
-              }
-              onClick={
-                () =>
-                  handleDownload(
-                    'xlsx'
-                  )
-              }
-            >
-
-              <FileSpreadsheet
-                size={16}
-              />
-
-              {
-                exportingExcel
-                  ? 'Exporting…'
-                  : 'Excel'
-              }
-
-            </Button>
+      <style>
+        {printStyles}
+      </style>
 
 
-            <Button
-              type="button"
-              variant="outline"
-              disabled={
-                exportingCsv
-              }
-              onClick={
-                () =>
-                  handleDownload(
-                    'csv'
-                  )
-              }
-            >
+      <div>
 
-              <FileDown
-                size={16}
-              />
+        {/* ===================================================
+            SCREEN HEADER
+        =================================================== */}
 
-              {
-                exportingCsv
-                  ? 'Exporting…'
-                  : 'CSV'
-              }
+        <div className="no-print">
 
-            </Button>
+          <PageHeader
 
+            eyebrow="Reporting"
 
-            <Button
-              type="button"
-              variant="outline"
-              onClick={
-                handlePrint
-              }
-            >
+            title="Reports"
 
-              <Printer
-                size={16}
-              />
+            description="Company-wise BG, LC and Fixed Deposit registers with Excel, CSV and print export."
 
-              Print / PDF
+            actions={
 
-            </Button>
+              <div className="flex flex-wrap gap-2">
 
-          </div>
-        }
-      />
+                {/* EXCEL */}
 
+                <Button
 
-      <Card className="mb-6">
+                  type="button"
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                  variant="outline"
 
-          <Select
-            label="Report Type"
-            value={
-              reportType
-            }
-            onChange={
-              (e) =>
-                setReportType(
-                  e.target.value
-                )
-            }
-          >
-
-            <option value="BG">
-              Bank Guarantees
-            </option>
-
-            <option value="LC">
-              Letters of Credit
-            </option>
-
-            <option value="FD">
-              Fixed Deposits
-            </option>
-
-          </Select>
-
-
-          <Select
-            label="Group Company"
-            value={
-              companyId
-            }
-            onChange={
-              (e) =>
-                setCompanyId(
-                  e.target.value
-                )
-            }
-          >
-
-            <option value="">
-              All Companies
-            </option>
-
-
-            {companies.map(
-              (company) => (
-
-                <option
-                  key={
-                    company.id
+                  disabled={
+                    exportingExcel
                   }
-                  value={
-                    company.id
+
+                  onClick={
+                    () =>
+                      handleDownload(
+                        'xlsx'
+                      )
                   }
                 >
 
-                  {company.companyName}
+                  <FileSpreadsheet
+                    size={16}
+                  />
 
-                </option>
-              )
-            )}
+                  {
+                    exportingExcel
+                      ? 'Exporting…'
+                      : 'Excel'
+                  }
 
-          </Select>
-
-
-          <div className="rounded-xl border border-border bg-ink-50/40 p-4">
-
-            <p className="text-xs font-medium uppercase tracking-wide text-muted">
-              Total Amount
-            </p>
-
-            <p className="mt-2 num text-xl font-semibold text-ink-900">
-
-              {formatCurrency(
-                totalAmount
-              )}
-
-            </p>
-
-            <p className="mt-1 text-xs text-muted">
-
-              {rows.length}
-
-              {' '}
-
-              {
-                rows.length === 1
-                  ? 'record'
-                  : 'records'
-              }
-
-            </p>
-
-          </div>
-
-        </div>
+                </Button>
 
 
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
+                {/* CSV */}
 
-          <div>
+                <Button
 
-            <p className="text-sm font-medium text-ink-900">
-              {reportTitle}
-            </p>
+                  type="button"
 
-            <p className="mt-1 text-xs text-muted">
+                  variant="outline"
 
-              {
-                selectedCompany
-                  ?.companyName ||
-                'All Group Companies'
-              }
+                  disabled={
+                    exportingCsv
+                  }
 
-            </p>
+                  onClick={
+                    () =>
+                      handleDownload(
+                        'csv'
+                      )
+                  }
+                >
 
-          </div>
+                  <FileDown
+                    size={16}
+                  />
+
+                  {
+                    exportingCsv
+                      ? 'Exporting…'
+                      : 'CSV'
+                  }
+
+                </Button>
 
 
-          <p className="text-xs text-muted">
+                {/* PRINT */}
 
-            Excel and CSV files are generated by the backend from live ledger data.
+                <Button
 
-          </p>
+                  type="button"
 
-        </div>
+                  variant="outline"
 
-      </Card>
+                  onClick={
+                    handlePrint
+                  }
+                >
 
+                  <Printer
+                    size={16}
+                  />
 
-      <Card>
+                  Print / PDF
 
-        <div className="flex items-center gap-2">
+                </Button>
 
-          <FileBarChart2
-            size={18}
-            className="text-muted"
+              </div>
+            }
           />
 
-          <h3 className="font-display text-base font-semibold text-ink-900">
+        </div>
 
-            {reportTitle}
 
-          </h3>
+        {/* ===================================================
+            SCREEN FILTER CARD
+        =================================================== */}
+
+        <div className="no-print">
+
+          <Card className="mb-6">
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+
+              {/* REPORT TYPE */}
+
+              <Select
+
+                label="Report Type"
+
+                value={
+                  reportType
+                }
+
+                onChange={
+                  (
+                    event
+                  ) =>
+                    setReportType(
+                      event.target.value
+                    )
+                }
+              >
+
+                <option value="BG">
+                  Bank Guarantees
+                </option>
+
+                <option value="LC">
+                  Letters of Credit
+                </option>
+
+                <option value="FD">
+                  Fixed Deposits
+                </option>
+
+              </Select>
+
+
+              {/* COMPANY */}
+
+              <Select
+
+                label="Group Company"
+
+                value={
+                  companyId
+                }
+
+                onChange={
+                  (
+                    event
+                  ) =>
+                    setCompanyId(
+                      event.target.value
+                    )
+                }
+              >
+
+                <option value="">
+                  All Companies
+                </option>
+
+
+                {
+                  companies.map(
+                    (
+                      company
+                    ) => (
+
+                      <option
+
+                        key={
+                          company.id
+                        }
+
+                        value={
+                          company.id
+                        }
+                      >
+
+                        {
+                          company.companyName
+                        }
+
+                      </option>
+                    )
+                  )
+                }
+
+              </Select>
+
+
+              {/* TOTAL */}
+
+              <div className="rounded-xl border border-border bg-ink-50/40 p-4">
+
+                <p className="text-xs font-medium uppercase tracking-wide text-muted">
+                  Total Amount
+                </p>
+
+
+                <p className="mt-2 num text-xl font-semibold text-ink-900">
+
+                  {
+                    formatCurrency(
+                      totalAmount
+                    )
+                  }
+
+                </p>
+
+
+                <p className="mt-1 text-xs text-muted">
+
+                  {
+                    rows.length
+                  }
+
+                  {' '}
+
+                  {
+                    rows.length ===
+                    1
+                      ? 'record'
+                      : 'records'
+                  }
+
+                </p>
+
+              </div>
+
+            </div>
+
+
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
+
+              <div>
+
+                <p className="text-sm font-medium text-ink-900">
+                  {reportTitle}
+                </p>
+
+
+                <p className="mt-1 text-xs text-muted">
+                  {reportCompanyName}
+                </p>
+
+              </div>
+
+
+              <p className="text-xs text-muted">
+                Excel and CSV files are generated by the backend from live ledger data.
+              </p>
+
+            </div>
+
+          </Card>
 
         </div>
 
 
-        <div className="mt-5 overflow-x-auto">
+        {/* ===================================================
+            ACTUAL REPORT
+        =================================================== */}
 
-          {
-            reportType ===
-            'BG'
+        <Card className="report-print-area">
 
-              ? (
-                  <BgReport
-                    rows={
-                      rows
-                    }
-                  />
-                )
+          {/* =================================================
+              PRINT HEADER
+          ================================================= */}
 
-              : reportType ===
-                'LC'
+          <div className="print-only print-report-header">
+
+            <p className="print-company-name">
+              {reportCompanyName}
+            </p>
+
+
+            <h1 className="print-report-title">
+              {reportTitle}
+            </h1>
+
+
+            <div className="print-report-meta">
+
+              <span>
+                <strong>
+                  Generated:
+                </strong>{' '}
+                {generatedDate}
+              </span>
+
+
+              <span>
+                <strong>
+                  Records:
+                </strong>{' '}
+                {rows.length}
+              </span>
+
+
+              <span>
+                <strong>
+                  Total Amount:
+                </strong>{' '}
+                {formatCurrency(
+                  totalAmount
+                )}
+              </span>
+
+            </div>
+
+          </div>
+
+
+          {/* =================================================
+              SCREEN REPORT TITLE
+          ================================================= */}
+
+          <div className="no-print flex items-center gap-2">
+
+            <FileBarChart2
+              size={18}
+              className="text-muted"
+            />
+
+
+            <h3 className="font-display text-base font-semibold text-ink-900">
+
+              {reportTitle}
+
+            </h3>
+
+          </div>
+
+
+          {/* =================================================
+              REPORT TABLE
+          ================================================= */}
+
+          <div className="mt-5 overflow-x-auto">
+
+            {
+              reportType ===
+              'BG'
 
                 ? (
-                    <LcReport
+
+                    <BgReport
                       rows={
                         rows
                       }
                     />
+
                   )
 
-                : (
-                    <FdReport
-                      rows={
-                        rows
-                      }
-                    />
+                : reportType ===
+                  'LC'
+
+                  ? (
+
+                      <LcReport
+                        rows={
+                          rows
+                        }
+                      />
+
+                    )
+
+                  : (
+
+                      <FdReport
+                        rows={
+                          rows
+                        }
+                      />
+
+                    )
+            }
+
+          </div>
+
+
+          {/* =================================================
+              PRINT TOTAL
+          ================================================= */}
+
+          <div className="print-only print-summary">
+
+            <div className="print-summary-box">
+
+              <p className="print-summary-label">
+                Total Report Amount
+              </p>
+
+
+              <p className="print-summary-value">
+
+                {
+                  formatCurrency(
+                    totalAmount
                   )
-          }
+                }
 
-        </div>
+              </p>
 
-      </Card>
+            </div>
 
-    </div>
+          </div>
+
+        </Card>
+
+      </div>
+
+    </>
   )
 }
 
+
+// =========================================================
+// BANK GUARANTEE REPORT
+// =========================================================
 
 function BgReport({
   rows,
@@ -890,70 +1444,99 @@ function BgReport({
 
       <tbody>
 
-        {rows.length === 0 ? (
+        {
+          rows.length ===
+          0
 
-          <EmptyRow
-            colSpan={9}
-          />
+            ? (
 
-        ) : (
+                <EmptyRow
+                  colSpan={9}
+                />
 
-          rows.map(
-            (row) => (
+              )
 
-              <tr
-                key={
-                  row.id
-                }
-                className="border-b border-border/70"
-              >
+            : (
 
-                <td className="py-3 pr-4">
-                  {row.groupCompanyName || '—'}
-                </td>
+                rows.map(
+                  (
+                    row
+                  ) => (
 
-                <td className="py-3 pr-4 num font-medium text-ink-900">
-                  {row.bgNo}
-                </td>
+                    <tr
+                      key={
+                        row.id
+                      }
+                      className="border-b border-border/70"
+                    >
 
-                <td className="py-3 pr-4">
-                  {row.issuingBankName || '—'}
-                </td>
+                      <td className="py-3 pr-4">
+                        {row.groupCompanyName || '—'}
+                      </td>
 
-                <td className="py-3 pr-4">
-                  {row.clientName || '—'}
-                </td>
 
-                <td className="py-3 pr-4">
-                  {row.siteProject || '—'}
-                </td>
+                      <td className="py-3 pr-4 num font-medium text-ink-900">
+                        {row.bgNo || '—'}
+                      </td>
 
-                <td className="py-3 pr-4">
-                  {formatDate(
-                    row.issueDate
-                  )}
-                </td>
 
-                <td className="py-3 pr-4">
-                  {formatDate(
-                    row.expiryDate
-                  )}
-                </td>
+                      <td className="py-3 pr-4">
+                        {row.issuingBankName || '—'}
+                      </td>
 
-                <td className="py-3 pr-4 num font-medium">
-                  {formatCurrency(
-                    row.bgAmount
-                  )}
-                </td>
 
-                <td className="py-3">
-                  {row.status || '—'}
-                </td>
+                      <td className="py-3 pr-4">
+                        {row.clientName || '—'}
+                      </td>
 
-              </tr>
-            )
-          )
-        )}
+
+                      <td className="py-3 pr-4">
+                        {row.siteProject || '—'}
+                      </td>
+
+
+                      <td className="py-3 pr-4">
+
+                        {
+                          formatDate(
+                            row.issueDate
+                          )
+                        }
+
+                      </td>
+
+
+                      <td className="py-3 pr-4">
+
+                        {
+                          formatDate(
+                            row.expiryDate
+                          )
+                        }
+
+                      </td>
+
+
+                      <td className="py-3 pr-4 num font-medium">
+
+                        {
+                          formatCurrency(
+                            row.bgAmount
+                          )
+                        }
+
+                      </td>
+
+
+                      <td className="py-3">
+                        {row.status || '—'}
+                      </td>
+
+                    </tr>
+                  )
+                )
+              )
+        }
 
       </tbody>
 
@@ -961,6 +1544,10 @@ function BgReport({
   )
 }
 
+
+// =========================================================
+// LETTER OF CREDIT REPORT
+// =========================================================
 
 function LcReport({
   rows,
@@ -1013,66 +1600,94 @@ function LcReport({
 
       <tbody>
 
-        {rows.length === 0 ? (
+        {
+          rows.length ===
+          0
 
-          <EmptyRow
-            colSpan={8}
-          />
+            ? (
 
-        ) : (
+                <EmptyRow
+                  colSpan={8}
+                />
 
-          rows.map(
-            (row) => (
+              )
 
-              <tr
-                key={
-                  row.id
-                }
-                className="border-b border-border/70"
-              >
+            : (
 
-                <td className="py-3 pr-4">
-                  {row.groupCompanyName || '—'}
-                </td>
+                rows.map(
+                  (
+                    row
+                  ) => (
 
-                <td className="py-3 pr-4 num font-medium text-ink-900">
-                  {row.lcNo}
-                </td>
+                    <tr
+                      key={
+                        row.id
+                      }
+                      className="border-b border-border/70"
+                    >
 
-                <td className="py-3 pr-4">
-                  {row.issueBankName || '—'}
-                </td>
+                      <td className="py-3 pr-4">
+                        {row.groupCompanyName || '—'}
+                      </td>
 
-                <td className="py-3 pr-4">
-                  {row.linkedVendorName || '—'}
-                </td>
 
-                <td className="py-3 pr-4">
-                  {formatDate(
-                    row.lcCreationDate
-                  )}
-                </td>
+                      <td className="py-3 pr-4 num font-medium text-ink-900">
+                        {row.lcNo || '—'}
+                      </td>
 
-                <td className="py-3 pr-4">
-                  {formatDate(
-                    row.lcExpiryDate
-                  )}
-                </td>
 
-                <td className="py-3 pr-4 num font-medium">
-                  {formatCurrency(
-                    row.lcAmount
-                  )}
-                </td>
+                      <td className="py-3 pr-4">
+                        {row.issueBankName || '—'}
+                      </td>
 
-                <td className="py-3">
-                  {row.status || '—'}
-                </td>
 
-              </tr>
-            )
-          )
-        )}
+                      <td className="py-3 pr-4">
+                        {row.linkedVendorName || '—'}
+                      </td>
+
+
+                      <td className="py-3 pr-4">
+
+                        {
+                          formatDate(
+                            row.lcCreationDate
+                          )
+                        }
+
+                      </td>
+
+
+                      <td className="py-3 pr-4">
+
+                        {
+                          formatDate(
+                            row.lcExpiryDate
+                          )
+                        }
+
+                      </td>
+
+
+                      <td className="py-3 pr-4 num font-medium">
+
+                        {
+                          formatCurrency(
+                            row.lcAmount
+                          )
+                        }
+
+                      </td>
+
+
+                      <td className="py-3">
+                        {row.status || '—'}
+                      </td>
+
+                    </tr>
+                  )
+                )
+              )
+        }
 
       </tbody>
 
@@ -1080,6 +1695,10 @@ function LcReport({
   )
 }
 
+
+// =========================================================
+// FIXED DEPOSIT REPORT
+// =========================================================
 
 function FdReport({
   rows,
@@ -1136,76 +1755,113 @@ function FdReport({
 
       <tbody>
 
-        {rows.length === 0 ? (
+        {
+          rows.length ===
+          0
 
-          <EmptyRow
-            colSpan={9}
-          />
+            ? (
 
-        ) : (
+                <EmptyRow
+                  colSpan={9}
+                />
 
-          rows.map(
-            (row) => (
+              )
 
-              <tr
-                key={
-                  row.id
-                }
-                className="border-b border-border/70"
-              >
+            : (
 
-                <td className="py-3 pr-4">
-                  {row.groupCompanyName || '—'}
-                </td>
+                rows.map(
+                  (
+                    row
+                  ) => (
 
-                <td className="py-3 pr-4 num font-medium text-ink-900">
-                  {row.fdNumber}
-                </td>
+                    <tr
+                      key={
+                        row.id
+                      }
+                      className="border-b border-border/70"
+                    >
 
-                <td className="py-3 pr-4">
-                  {row.bankName || '—'}
-                </td>
+                      <td className="py-3 pr-4">
+                        {row.groupCompanyName || '—'}
+                      </td>
 
-                <td className="py-3 pr-4">
-                  {formatDate(
-                    row.fdCreationDate
-                  )}
-                </td>
 
-                <td className="py-3 pr-4">
-                  {formatDate(
-                    row.fdMaturityDate
-                  )}
-                </td>
+                      <td className="py-3 pr-4 num font-medium text-ink-900">
+                        {row.fdNumber || '—'}
+                      </td>
 
-                <td className="py-3 pr-4 num">
-                  {formatCurrency(
-                    row.fdAmount
-                  )}
-                </td>
 
-                <td className="py-3 pr-4 num">
-                  {formatCurrency(
-                    row.linkedAmount ??
-                    0
-                  )}
-                </td>
+                      <td className="py-3 pr-4">
+                        {row.bankName || '—'}
+                      </td>
 
-                <td className="py-3 pr-4 num font-medium">
-                  {formatCurrency(
-                    row.availableAmount ??
-                    0
-                  )}
-                </td>
 
-                <td className="py-3">
-                  {row.status || '—'}
-                </td>
+                      <td className="py-3 pr-4">
 
-              </tr>
-            )
-          )
-        )}
+                        {
+                          formatDate(
+                            row.fdCreationDate
+                          )
+                        }
+
+                      </td>
+
+
+                      <td className="py-3 pr-4">
+
+                        {
+                          formatDate(
+                            row.fdMaturityDate
+                          )
+                        }
+
+                      </td>
+
+
+                      <td className="py-3 pr-4 num">
+
+                        {
+                          formatCurrency(
+                            row.fdAmount
+                          )
+                        }
+
+                      </td>
+
+
+                      <td className="py-3 pr-4 num">
+
+                        {
+                          formatCurrency(
+                            row.linkedAmount ??
+                            0
+                          )
+                        }
+
+                      </td>
+
+
+                      <td className="py-3 pr-4 num font-medium">
+
+                        {
+                          formatCurrency(
+                            row.availableAmount ??
+                            0
+                          )
+                        }
+
+                      </td>
+
+
+                      <td className="py-3">
+                        {row.status || '—'}
+                      </td>
+
+                    </tr>
+                  )
+                )
+              )
+        }
 
       </tbody>
 
@@ -1213,6 +1869,10 @@ function FdReport({
   )
 }
 
+
+// =========================================================
+// EMPTY ROW
+// =========================================================
 
 function EmptyRow({
   colSpan,
@@ -1223,12 +1883,16 @@ function EmptyRow({
     <tr>
 
       <td
+
         colSpan={
           colSpan
         }
+
         className="py-10 text-center text-sm text-muted"
       >
+
         No records available for the selected report.
+
       </td>
 
     </tr>

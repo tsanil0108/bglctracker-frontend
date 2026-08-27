@@ -15,7 +15,6 @@ import {
   Link,
 } from 'react-router-dom'
 
-
 import PageHeader from '../../components/common/PageHeader'
 import Button from '../../components/common/Button'
 import Table from '../../components/common/Table'
@@ -23,7 +22,6 @@ import Modal from '../../components/common/Modal'
 import ConfirmDialog from '../../components/common/ConfirmDialog'
 import Loader from '../../components/common/Loader'
 import StatusBadge from '../../components/common/StatusBadge'
-import BgFdLinkSection from '../../components/bg/BgFdLinkSection'
 
 import {
   Input,
@@ -35,88 +33,79 @@ import {
 } from '../../components/common/Toast'
 
 import {
-  extractErrorMessage,
-} from '../../api/axiosClient'
-
-import {
-  bgApi,
-} from '../../api/bgApi'
-
-import {
   fdApi,
 } from '../../api/fdApi'
 
 import {
-  fdLinkApi,
-} from '../../api/fdLinkApi'
-
-import {
-  bankApi,
-  clientApi,
-  guaranteeTypeApi,
   groupCompanyApi,
+  bankApi,
 } from '../../api/masterApi'
 
 import {
-  INSTRUMENT_STATUS,
-} from '../../utils/constants'
+  extractErrorMessage,
+} from '../../api/axiosClient'
 
 import {
   formatCurrency,
   formatDate,
-  toInputDate,
 } from '../../utils/formatters'
 
+
+// =========================================================
+// EMPTY FORM
+// =========================================================
 
 const emptyForm = {
 
   groupCompanyId: '',
 
-  clientId: '',
+  bankId: '',
 
-  siteProject: '',
+  fdNumber: '',
 
-  guaranteeTypeId: '',
+  fdAmount: '',
 
-  issuingBankId: '',
+  fdCreationDate: '',
 
-  bgNo: '',
+  fdMaturityDate: '',
 
-  bgAmount: '',
+  period: '',
 
   interestRate: '',
 
-  bankCharges: '',
-
-  issueDate: '',
-
-  expiryDate: '',
-
-  claimExpiryDate: '',
-
-  durationClaimPeriod: '',
-
-  status:
-    INSTRUMENT_STATUS.ACTIVE,
+  status: 'OPEN',
 }
 
 
-export default function BgList() {
+// =========================================================
+// STATUS FILTERS
+// =========================================================
+
+const FILTERS = [
+  'ALL',
+  'OPEN',
+  'LIEN_MARKED',
+  'CLOSED',
+]
+
+
+// =========================================================
+// PAGE
+// =========================================================
+
+export default function FdList() {
 
   const { push } =
     useToast()
 
 
+  // =======================================================
+  // DATA
+  // =======================================================
+
   const [
     rows,
     setRows,
-  ] =
-    useState([])
-
-
-  const [
-    banks,
-    setBanks,
   ] =
     useState([])
 
@@ -129,22 +118,8 @@ export default function BgList() {
 
 
   const [
-    clients,
-    setClients,
-  ] =
-    useState([])
-
-
-  const [
-    guaranteeTypes,
-    setGuaranteeTypes,
-  ] =
-    useState([])
-
-
-  const [
-    fds,
-    setFds,
+    banks,
+    setBanks,
   ] =
     useState([])
 
@@ -156,12 +131,20 @@ export default function BgList() {
     useState(true)
 
 
-  const [
-    statusFilter,
-    setStatusFilter,
-  ] =
-    useState('')
+  // =======================================================
+  // FILTER
+  // =======================================================
 
+  const [
+    activeFilter,
+    setActiveFilter,
+  ] =
+    useState('ALL')
+
+
+  // =======================================================
+  // ADD / EDIT
+  // =======================================================
 
   const [
     modalOpen,
@@ -185,27 +168,6 @@ export default function BgList() {
 
 
   const [
-    linkFd,
-    setLinkFd,
-  ] =
-    useState(false)
-
-
-  const [
-    selectedFdId,
-    setSelectedFdId,
-  ] =
-    useState('')
-
-
-  const [
-    linkedAmount,
-    setLinkedAmount,
-  ] =
-    useState('')
-
-
-  const [
     errors,
     setErrors,
   ] =
@@ -218,6 +180,10 @@ export default function BgList() {
   ] =
     useState(false)
 
+
+  // =======================================================
+  // DELETE
+  // =======================================================
 
   const [
     deleteTarget,
@@ -233,52 +199,84 @@ export default function BgList() {
     useState(false)
 
 
-  const load =
-    async (
-      status
-    ) => {
+  const [
+    deleteBlocked,
+    setDeleteBlocked,
+  ] =
+    useState(null)
 
-      setLoading(true)
+
+  // =======================================================
+  // LOAD DATA
+  // =======================================================
+
+  const load =
+    async () => {
+
+      setLoading(
+        true
+      )
+
 
       try {
 
-        const data =
-          await bgApi.getAll(
-            status ||
-            undefined
-          )
+        const [
+          fdData,
+          companyData,
+          bankData,
+        ] =
+          await Promise.all([
 
-        setRows(data)
+            fdApi.getAll(),
 
-      } catch {
+            groupCompanyApi.getAll(),
+
+            bankApi.getAll(),
+          ])
+
+
+        setRows(
+          Array.isArray(fdData)
+            ? fdData
+            : []
+        )
+
+
+        setCompanies(
+          Array.isArray(companyData)
+            ? companyData
+            : []
+        )
+
+
+        setBanks(
+          Array.isArray(bankData)
+            ? bankData
+            : []
+        )
+
+
+      } catch (error) {
+
+        console.error(
+          'FD load error:',
+          error
+        )
+
 
         push(
-          'Could not load Bank Guarantees.',
+          extractErrorMessage(
+            error,
+            'Could not load Fixed Deposits.'
+          ),
           'error'
         )
 
+
       } finally {
 
-        setLoading(false)
-      }
-    }
-
-
-  const loadFds =
-    async () => {
-
-      try {
-
-        const data =
-          await fdApi.getAll()
-
-        setFds(data)
-
-      } catch {
-
-        push(
-          'Could not load Fixed Deposits.',
-          'error'
+        setLoading(
+          false
         )
       }
     }
@@ -287,47 +285,7 @@ export default function BgList() {
   useEffect(
     () => {
 
-      groupCompanyApi
-        .getAll()
-        .then(
-          setCompanies
-        )
-        .catch(
-          () => {}
-        )
-
-
-      bankApi
-        .getAll()
-        .then(
-          setBanks
-        )
-        .catch(
-          () => {}
-        )
-
-
-      clientApi
-        .getAll()
-        .then(
-          setClients
-        )
-        .catch(
-          () => {}
-        )
-
-
-      guaranteeTypeApi
-        .getAll()
-        .then(
-          setGuaranteeTypes
-        )
-        .catch(
-          () => {}
-        )
-
-
-      loadFds()
+      load()
 
       // eslint-disable-next-line react-hooks/exhaustive-deps
     },
@@ -335,126 +293,66 @@ export default function BgList() {
   )
 
 
-  useEffect(
-    () => {
+  // =======================================================
+  // FILTERED ROWS
+  // =======================================================
 
-      load(
-        statusFilter
-      )
-
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    },
-    [
-      statusFilter,
-    ]
-  )
-
-
-  /*
-   * Only same Company + same Bank FDs.
-   */
-  const eligibleFds =
+  const filteredRows =
     useMemo(
       () => {
 
         if (
-          !form.groupCompanyId ||
-          !form.issuingBankId
+          activeFilter ===
+          'ALL'
         ) {
 
-          return []
+          return rows
         }
 
 
-        return fds.filter(
-          (fd) => {
+        return rows.filter(
+          (
+            row
+          ) =>
 
-            const sameCompany =
-              String(
-                fd.groupCompanyId
-              ) ===
-              String(
-                form.groupCompanyId
-              )
-
-
-            const sameBank =
-              String(
-                fd.bankId
-              ) ===
-              String(
-                form.issuingBankId
-              )
-
-
-            const notClosed =
-              fd.status !==
-              'CLOSED'
-
-
-            const available =
-              Number(
-                fd.availableAmount ??
-                fd.fdAmount ??
-                0
-              )
-
-
-            return (
-              sameCompany &&
-              sameBank &&
-              notClosed &&
-              available > 0
-            )
-          }
+            String(
+              row.status ||
+              ''
+            ).toUpperCase() ===
+            activeFilter
         )
+
       },
       [
-        fds,
-        form.groupCompanyId,
-        form.issuingBankId,
+        rows,
+        activeFilter,
       ]
     )
 
 
-  const selectedFd =
-    useMemo(
-      () =>
-        eligibleFds.find(
-          (fd) =>
-            String(fd.id) ===
-            String(selectedFdId)
-        ),
-      [
-        eligibleFds,
-        selectedFdId,
-      ]
-    )
-
-
-  const resetFdLink =
-    () => {
-
-      setLinkFd(false)
-
-      setSelectedFdId('')
-
-      setLinkedAmount('')
-    }
-
+  // =======================================================
+  // OPEN CREATE
+  // =======================================================
 
   const openCreate =
     () => {
 
-      setEditing(null)
-
-      setForm(
-        emptyForm
+      setEditing(
+        null
       )
 
-      resetFdLink()
 
-      setErrors({})
+      setForm(
+        {
+          ...emptyForm,
+        }
+      )
+
+
+      setErrors(
+        {}
+      )
+
 
       setModalOpen(
         true
@@ -462,10 +360,19 @@ export default function BgList() {
     }
 
 
-  const openEdit =
-    (row) => {
+  // =======================================================
+  // OPEN EDIT
+  // =======================================================
 
-      setEditing(row)
+  const openEdit =
+    (
+      row
+    ) => {
+
+      setEditing(
+        row
+      )
+
 
       setForm({
 
@@ -473,65 +380,46 @@ export default function BgList() {
           row.groupCompanyId ??
           '',
 
-        clientId:
-          row.clientId ??
+        bankId:
+          row.bankId ??
           '',
 
-        siteProject:
-          row.siteProject ??
+        fdNumber:
+          row.fdNumber ??
+          row.fdNo ??
           '',
 
-        guaranteeTypeId:
-          row.guaranteeTypeId ??
+        fdAmount:
+          row.fdAmount ??
           '',
 
-        issuingBankId:
-          row.issuingBankId ??
+        fdCreationDate:
+          row.fdCreationDate ??
           '',
 
-        bgNo:
-          row.bgNo ??
+        fdMaturityDate:
+          row.fdMaturityDate ??
           '',
 
-        bgAmount:
-          row.bgAmount ??
+        period:
+          row.period ??
           '',
 
         interestRate:
           row.interestRate ??
-          '',
-
-        bankCharges:
-          row.bankCharges ??
-          '',
-
-        issueDate:
-          toInputDate(
-            row.issueDate
-          ),
-
-        expiryDate:
-          toInputDate(
-            row.expiryDate
-          ),
-
-        claimExpiryDate:
-          toInputDate(
-            row.claimExpiryDate
-          ),
-
-        durationClaimPeriod:
-          row.durationClaimPeriod ??
+          row.rate ??
           '',
 
         status:
           row.status ??
-          INSTRUMENT_STATUS.ACTIVE,
+          'OPEN',
       })
 
-      resetFdLink()
 
-      setErrors({})
+      setErrors(
+        {}
+      )
+
 
       setModalOpen(
         true
@@ -539,230 +427,159 @@ export default function BgList() {
     }
 
 
-  const handleCompanyChange =
-    (companyId) => {
+  // =======================================================
+  // FIELD CHANGE
+  // =======================================================
+
+  const change =
+    (
+      name,
+      value
+    ) => {
 
       setForm(
-        (current) => ({
+        (
+          current
+        ) => ({
+
           ...current,
-          groupCompanyId:
-            companyId,
+
+          [name]:
+            value,
         })
       )
 
-      setSelectedFdId('')
 
-      setLinkedAmount('')
-    }
+      if (
+        errors[name]
+      ) {
 
+        setErrors(
+          (
+            current
+          ) => {
 
-  const handleBankChange =
-    (bankId) => {
-
-      setForm(
-        (current) => ({
-          ...current,
-          issuingBankId:
-            bankId,
-        })
-      )
-
-      setSelectedFdId('')
-
-      setLinkedAmount('')
-
-      setErrors(
-        (current) => ({
-          ...current,
-          issuingBankId:
-            undefined,
-          selectedFdId:
-            undefined,
-          linkedAmount:
-            undefined,
-        })
-      )
-    }
+            const next =
+              {
+                ...current,
+              }
 
 
-  const handleFdSelection =
-    (fdId) => {
-
-      setSelectedFdId(
-        fdId
-      )
+            delete next[name]
 
 
-      const fd =
-        eligibleFds.find(
-          (item) =>
-            String(item.id) ===
-            String(fdId)
+            return next
+          }
         )
-
-
-      /*
-       * Suggest maximum currently available amount.
-       * User can reduce it.
-       */
-      setLinkedAmount(
-        fd
-          ? String(
-              fd.availableAmount ??
-              ''
-            )
-          : ''
-      )
-
-
-      setErrors(
-        (current) => ({
-          ...current,
-          selectedFdId:
-            undefined,
-          linkedAmount:
-            undefined,
-        })
-      )
+      }
     }
 
+
+  // =======================================================
+  // VALIDATE
+  // =======================================================
 
   const validate =
     () => {
 
-      const errs = {}
+      const next =
+        {}
 
 
       if (
         !form.groupCompanyId
       ) {
 
-        errs.groupCompanyId =
-          'Required'
+        next.groupCompanyId =
+          'Group Company is required'
       }
 
 
       if (
-        !form.clientId
+        !form.bankId
       ) {
 
-        errs.clientId =
-          'Required'
+        next.bankId =
+          'Bank is required'
       }
 
 
       if (
-        !form.guaranteeTypeId
+        !String(
+          form.fdNumber ||
+          ''
+        ).trim()
       ) {
 
-        errs.guaranteeTypeId =
-          'Required'
+        next.fdNumber =
+          'FD Number is required'
       }
 
 
-      if (
-        !form.issuingBankId
-      ) {
-
-        errs.issuingBankId =
-          'Required'
-      }
-
-
-      if (
-        !form.bgNo
-          ?.trim()
-      ) {
-
-        errs.bgNo =
-          'Required'
-      }
-
-
-      if (
-        !form.bgAmount ||
+      const fdAmount =
         Number(
-          form.bgAmount
-        ) <= 0
+          form.fdAmount
+        )
+
+
+      if (
+        !Number.isFinite(fdAmount)
+        ||
+        fdAmount <= 0
       ) {
 
-        errs.bgAmount =
-          'Enter an amount greater than 0'
+        next.fdAmount =
+          'FD Amount must be greater than zero'
       }
 
 
       if (
-        !editing &&
-        linkFd
+        form.fdCreationDate
+        &&
+        form.fdMaturityDate
+        &&
+        new Date(
+          form.fdMaturityDate
+        ) <
+        new Date(
+          form.fdCreationDate
+        )
       ) {
 
-        if (
-          !selectedFdId
-        ) {
-
-          errs.selectedFdId =
-            'Select a Fixed Deposit'
-        }
-
-
-        const amount =
-          Number(
-            linkedAmount
-          )
-
-
-        if (
-          !linkedAmount ||
-          Number.isNaN(
-            amount
-          ) ||
-          amount <= 0
-        ) {
-
-          errs.linkedAmount =
-            'Enter an amount greater than 0'
-
-        } else if (
-          selectedFd &&
-          amount >
-          Number(
-            selectedFd.availableAmount ??
-            0
-          )
-        ) {
-
-          errs.linkedAmount =
-            `Maximum available is ${formatCurrency(
-              selectedFd.availableAmount
-            )}`
-        }
+        next.fdMaturityDate =
+          'Maturity date cannot be before creation date'
       }
 
 
       setErrors(
-        errs
+        next
       )
+
 
       return (
         Object.keys(
-          errs
-        ).length === 0
+          next
+        ).length ===
+        0
       )
     }
 
 
+  // =======================================================
+  // SAVE
+  // =======================================================
+
   const handleSave =
     async (
-      e
+      event
     ) => {
 
-      e.preventDefault()
+      event?.preventDefault()
 
 
       if (
         !validate()
       ) {
-
         return
       }
 
@@ -774,32 +591,40 @@ export default function BgList() {
 
       const payload = {
 
-        ...form,
-
         groupCompanyId:
           Number(
             form.groupCompanyId
           ),
 
-        clientId:
+        bankId:
           Number(
-            form.clientId
+            form.bankId
           ),
 
-        guaranteeTypeId:
+        fdNumber:
+          String(
+            form.fdNumber
+          ).trim(),
+
+        fdAmount:
           Number(
-            form.guaranteeTypeId
+            form.fdAmount
           ),
 
-        issuingBankId:
-          Number(
-            form.issuingBankId
-          ),
+        fdCreationDate:
+          form.fdCreationDate ||
+          null,
 
-        bgAmount:
-          Number(
-            form.bgAmount
-          ),
+        fdMaturityDate:
+          form.fdMaturityDate ||
+          null,
+
+        period:
+          form.period === ''
+            ? null
+            : Number(
+                form.period
+              ),
 
         interestRate:
           form.interestRate === ''
@@ -808,24 +633,9 @@ export default function BgList() {
                 form.interestRate
               ),
 
-        bankCharges:
-          form.bankCharges === ''
-            ? null
-            : Number(
-                form.bankCharges
-              ),
-
-        issueDate:
-          form.issueDate ||
-          null,
-
-        expiryDate:
-          form.expiryDate ||
-          null,
-
-        claimExpiryDate:
-          form.claimExpiryDate ||
-          null,
+        status:
+          form.status ||
+          'OPEN',
       }
 
 
@@ -835,78 +645,26 @@ export default function BgList() {
           editing
         ) {
 
-          await bgApi.update(
+          await fdApi.update(
             editing.id,
             payload
           )
 
+
           push(
-            'Bank Guarantee updated.'
+            'Fixed Deposit updated.'
           )
 
         } else {
 
-          const createdBg =
-            await bgApi.create(
-              payload
-            )
+          await fdApi.create(
+            payload
+          )
 
 
-          if (
-            linkFd &&
-            selectedFdId
-          ) {
-
-            try {
-
-              await fdLinkApi.create({
-
-                fdId:
-                  Number(
-                    selectedFdId
-                  ),
-
-                bgId:
-                  createdBg.id,
-
-                lcId:
-                  null,
-
-                linkedAmount:
-                  Number(
-                    linkedAmount
-                  ),
-
-                linkedDate:
-                  null,
-              })
-
-
-              push(
-                'Bank Guarantee added and Fixed Deposit linked.'
-              )
-
-            } catch (
-              linkError
-            ) {
-
-              push(
-                `Bank Guarantee was created, but FD linking failed: ${
-                  extractErrorMessage(
-                    linkError,
-                    'Please link it from Manage Links.'
-                  )
-                }`,
-                'error'
-              )
-            }
-
-          } else {
-
-            push(
-              'Bank Guarantee added.'
-            )
-          }
+          push(
+            'Fixed Deposit added.'
+          )
         }
 
 
@@ -915,25 +673,24 @@ export default function BgList() {
         )
 
 
-        await Promise.all([
-          load(
-            statusFilter
-          ),
-          loadFds(),
-        ])
+        setEditing(
+          null
+        )
 
 
-      } catch (
-        err
-      ) {
+        await load()
+
+
+      } catch (error) {
 
         push(
           extractErrorMessage(
-            err,
-            'Could not save Bank Guarantee.'
+            error,
+            'Could not save Fixed Deposit.'
           ),
           'error'
         )
+
 
       } finally {
 
@@ -944,45 +701,67 @@ export default function BgList() {
     }
 
 
+  // =======================================================
+  // DELETE
+  // =======================================================
+
   const handleDelete =
     async () => {
+
+      if (
+        !deleteTarget?.id
+      ) {
+        return
+      }
+
 
       setDeleting(
         true
       )
 
+
       try {
 
-        await bgApi.remove(
+        await fdApi.remove(
           deleteTarget.id
         )
 
+
         push(
-          'Bank Guarantee deleted.'
+          'Fixed Deposit deleted.'
         )
+
 
         setDeleteTarget(
           null
         )
 
-        await Promise.all([
-          load(
-            statusFilter
-          ),
-          loadFds(),
-        ])
 
-      } catch (
-        err
-      ) {
+        await load()
 
-        push(
+
+      } catch (error) {
+
+        const message =
           extractErrorMessage(
-            err,
-            'Could not delete Bank Guarantee.'
-          ),
-          'error'
+            error,
+            'Could not delete Fixed Deposit.'
+          )
+
+
+        setDeleteTarget(
+          null
         )
+
+
+        setDeleteBlocked({
+
+          title:
+            'Cannot Delete Fixed Deposit',
+
+          message,
+        })
+
 
       } finally {
 
@@ -993,26 +772,33 @@ export default function BgList() {
     }
 
 
+  // =======================================================
+  // TABLE COLUMNS
+  // =======================================================
+
   const columns = [
 
     {
       key:
-        'bgNo',
+        'fdNumber',
 
       header:
-        'BG No.',
+        'FD Number',
 
       render:
-        (row) => (
+        (
+          row
+        ) => (
 
-          <Link
-            to={
-              `/bg/${row.id}`
+          <span className="font-mono font-semibold text-ink-900">
+
+            {
+              row.fdNumber ||
+              row.fdNo ||
+              '—'
             }
-            className="num font-medium text-bg-700 hover:underline"
-          >
-            {row.bgNo}
-          </Link>
+
+          </span>
         ),
     },
 
@@ -1025,94 +811,17 @@ export default function BgList() {
         'Group Company',
 
       render:
-        (row) => (
+        (
+          row
+        ) => (
 
-          row.groupCompanyId
-            ? (
-                <Link
-                  to={
-                    `/master/group-companies/${row.groupCompanyId}`
-                  }
-                  className="text-bg-700 hover:underline"
-                >
-                  {row.groupCompanyName}
-                </Link>
-              )
-            : 'Unassigned'
-        ),
-    },
+          <span className="text-bg-700">
 
+            {
+              row.groupCompanyName ||
+              'Unassigned'
+            }
 
-    {
-      key:
-        'clientName',
-
-      header:
-        'Client',
-    },
-
-
-    {
-      key:
-        'issuingBankName',
-
-      header:
-        'Bank',
-    },
-
-
-    {
-      key:
-        'siteProject',
-
-      header:
-        'Site / Project',
-
-      render:
-        (row) =>
-          row.siteProject ||
-          '—',
-    },
-
-
-    {
-      key:
-        'guaranteeTypeCode',
-
-      header:
-        'Type',
-    },
-
-
-    {
-      key:
-        'expiryDate',
-
-      header:
-        'Expiry',
-
-      render:
-        (row) =>
-          formatDate(
-            row.expiryDate
-          ),
-    },
-
-
-    {
-      key:
-        'bgAmount',
-
-      header:
-        'Amount',
-
-      render:
-        (row) => (
-
-          <span className="num">
-            {formatCurrency(
-              row.bgAmount
-            )}
           </span>
         ),
     },
@@ -1120,24 +829,144 @@ export default function BgList() {
 
     {
       key:
-        'linkedFds',
+        'bankName',
 
       header:
-        'Linked FDs',
+        'Bank',
 
       render:
-        (row) =>
+        (
+          row
+        ) =>
 
-          row.linkedFds
-            ?.length
+          row.bankName ||
+          '—',
+    },
 
-            ? `${row.linkedFds.length} FD${
-                row.linkedFds.length > 1
-                  ? 's'
-                  : ''
-              }`
 
+    {
+      key:
+        'fdMaturityDate',
+
+      header:
+        'Maturity',
+
+      render:
+        (
+          row
+        ) =>
+
+          row.fdMaturityDate
+            ? formatDate(
+                row.fdMaturityDate
+              )
             : '—',
+    },
+
+
+    {
+      key:
+        'fdAmount',
+
+      header:
+        'FD Amount',
+
+      render:
+        (
+          row
+        ) => (
+
+          <span className="num">
+
+            {
+              formatCurrency(
+                row.fdAmount ||
+                0
+              )
+            }
+
+          </span>
+        ),
+    },
+
+
+    {
+      key:
+        'linkedAmount',
+
+      header:
+        'Linked',
+
+      render:
+        (
+          row
+        ) => (
+
+          <span className="num">
+
+            {
+              formatCurrency(
+                row.linkedAmount ||
+                0
+              )
+            }
+
+          </span>
+        ),
+    },
+
+
+    {
+      key:
+        'availableAmount',
+
+      header:
+        'Available',
+
+      render:
+        (
+          row
+        ) => {
+
+          const fdAmount =
+            Number(
+              row.fdAmount ||
+              0
+            )
+
+
+          const linked =
+            Number(
+              row.linkedAmount ||
+              0
+            )
+
+
+          const available =
+            row.availableAmount != null
+              ? Number(
+                  row.availableAmount
+                )
+              : Math.max(
+                  0,
+                  fdAmount -
+                  linked
+                )
+
+
+          return (
+
+            <span className="num font-semibold">
+
+              {
+                formatCurrency(
+                  available
+                )
+              }
+
+            </span>
+          )
+        },
     },
 
 
@@ -1149,7 +978,9 @@ export default function BgList() {
         'Status',
 
       render:
-        (row) => (
+        (
+          row
+        ) => (
 
           <StatusBadge
             status={
@@ -1161,21 +992,29 @@ export default function BgList() {
   ]
 
 
+  // =======================================================
+  // PAGE
+  // =======================================================
+
   return (
 
     <div>
+
+      {/* =====================================================
+          HEADER
+      ===================================================== */}
 
       <PageHeader
 
         eyebrow="Module"
 
-        title="Bank Guarantees"
+        title="FD Tracker"
 
-        description="Company-wise Bank Guarantees connected to clients, issuing banks and pledged Fixed Deposits."
+        description="Fixed Deposits connected to Group Company, Bank and BG/LC margin links."
 
         actions={
 
-          <>
+          <div className="flex gap-2">
 
             <Link
               to="/fd-linking"
@@ -1197,7 +1036,9 @@ export default function BgList() {
 
 
             <Button
+
               variant="accent"
+
               onClick={
                 openCreate
               }
@@ -1207,118 +1048,147 @@ export default function BgList() {
                 size={16}
               />
 
-              Add BG
+              Add Fixed Deposit
 
             </Button>
 
-          </>
+          </div>
         }
       />
 
 
-      <div className="mb-4 flex flex-wrap gap-2">
+      {/* =====================================================
+          FILTERS
+      ===================================================== */}
 
-        {[
-          '',
-          ...Object.values(
-            INSTRUMENT_STATUS
-          ),
-        ].map(
-          (status) => (
+      <div className="mb-5 flex flex-wrap gap-2">
 
-            <button
+        {
+          FILTERS.map(
+            (
+              filter
+            ) => (
 
-              key={
-                status ||
-                'all'
-              }
+              <button
 
-              type="button"
+                key={
+                  filter
+                }
 
-              onClick={
-                () =>
-                  setStatusFilter(
-                    status
-                  )
-              }
+                type="button"
 
-              className={
-                `rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors ${
-                  statusFilter ===
-                  status
+                onClick={
+                  () =>
+                    setActiveFilter(
+                      filter
+                    )
+                }
 
-                    ? 'bg-ink-900 text-white'
+                className={`
+                  rounded-full border px-4 py-2 text-sm font-medium transition
+                  ${
+                    activeFilter ===
+                    filter
 
-                    : 'bg-white text-muted ring-1 ring-inset ring-border hover:text-ink-900'
-                }`
-              }
-            >
+                      ? 'border-ink-900 bg-ink-900 text-white'
 
-              {
-                status === ''
-                  ? 'All'
-                  : status
-              }
+                      : 'border-border bg-white text-muted hover:text-ink-900'
+                  }
+                `}
+              >
 
-            </button>
+                {
+                  filter ===
+                  'LIEN_MARKED'
+                    ? 'LIEN-MARKED'
+                    : filter
+                }
+
+              </button>
+            )
           )
-        )}
+        }
 
       </div>
 
+
+      {/* =====================================================
+          TABLE
+      ===================================================== */}
 
       {
         loading
 
           ? (
+
               <Loader />
+
             )
 
           : (
+
               <Table
+
                 columns={
                   columns
                 }
+
                 rows={
-                  rows
+                  filteredRows
                 }
-                emptyMessage="No Bank Guarantees recorded yet."
+
+                emptyMessage="No Fixed Deposit records yet."
+
                 actions={
-                  (row) => (
+                  (
+                    row
+                  ) => (
 
                     <div className="flex justify-end gap-1">
 
                       <button
+
                         type="button"
+
                         onClick={
                           () =>
                             openEdit(
                               row
                             )
                         }
-                        className="rounded-lg p-2 text-muted hover:bg-ink-50 hover:text-ink-900"
-                        aria-label="Edit"
+
+                        className="rounded-lg p-2 text-muted transition hover:bg-ink-50 hover:text-ink-900"
+
+                        title="Edit Fixed Deposit"
                       >
+
                         <Pencil
                           size={15}
                         />
+
                       </button>
 
 
                       <button
+
                         type="button"
+
                         onClick={
                           () =>
                             setDeleteTarget(
                               row
                             )
                         }
-                        className="rounded-lg p-2 text-muted hover:bg-danger-50 hover:text-danger"
-                        aria-label="Delete"
+
+                        className="rounded-lg p-2 text-muted transition hover:bg-red-50 hover:text-red-600"
+
+                        title="Delete Fixed Deposit"
                       >
+
                         <Trash2
                           size={15}
                         />
+
                       </button>
 
                     </div>
@@ -1329,6 +1199,10 @@ export default function BgList() {
       }
 
 
+      {/* =====================================================
+          ADD / EDIT MODAL
+      ===================================================== */}
+
       <Modal
 
         open={
@@ -1336,18 +1210,23 @@ export default function BgList() {
         }
 
         onClose={
-          () =>
-            setModalOpen(
-              false
-            )
-        }
+          () => {
 
-        size="lg"
+            if (
+              !saving
+            ) {
+
+              setModalOpen(
+                false
+              )
+            }
+          }
+        }
 
         title={
           editing
-            ? 'Edit Bank Guarantee'
-            : 'Add Bank Guarantee'
+            ? 'Edit Fixed Deposit'
+            : 'Add Fixed Deposit'
         }
 
         footer={
@@ -1355,23 +1234,34 @@ export default function BgList() {
           <>
 
             <Button
+
               variant="outline"
+
               onClick={
                 () =>
                   setModalOpen(
                     false
                   )
               }
+
+              disabled={
+                saving
+              }
             >
+
               Cancel
+
             </Button>
 
 
             <Button
+
               variant="primary"
+
               onClick={
                 handleSave
               }
+
               disabled={
                 saving
               }
@@ -1396,470 +1286,429 @@ export default function BgList() {
           className="grid grid-cols-1 gap-4 sm:grid-cols-2"
         >
 
+          {/* GROUP COMPANY */}
+
           <Select
+
             label="Group Company"
+
             required
+
             error={
               errors.groupCompanyId
             }
+
             value={
               form.groupCompanyId
             }
+
             onChange={
-              (e) =>
-                handleCompanyChange(
-                  e.target.value
+              (
+                event
+              ) =>
+                change(
+                  'groupCompanyId',
+                  event.target.value
                 )
             }
           >
 
             <option value="">
-              Select group company…
+              Select company...
             </option>
 
-            {companies.map(
-              (company) => (
 
-                <option
-                  key={
-                    company.id
-                  }
-                  value={
-                    company.id
-                  }
-                >
+            {
+              companies.map(
+                (
+                  company
+                ) => (
 
-                  {company.companyName}
+                  <option
+                    key={
+                      company.id
+                    }
+                    value={
+                      company.id
+                    }
+                  >
 
-                </option>
+                    {
+                      company.companyName
+                    }
+
+                  </option>
+                )
               )
-            )}
+            }
 
           </Select>
 
 
-          <Select
-            label="Client"
-            required
-            error={
-              errors.clientId
-            }
-            value={
-              form.clientId
-            }
-            onChange={
-              (e) =>
-                setForm({
-                  ...form,
-                  clientId:
-                    e.target.value,
-                })
-            }
-          >
-
-            <option value="">
-              Select client…
-            </option>
-
-            {clients.map(
-              (client) => (
-
-                <option
-                  key={
-                    client.id
-                  }
-                  value={
-                    client.id
-                  }
-                >
-                  {client.clientName}
-                </option>
-              )
-            )}
-
-          </Select>
-
-
-          <Input
-            label="Site / Project"
-            value={
-              form.siteProject
-            }
-            onChange={
-              (e) =>
-                setForm({
-                  ...form,
-                  siteProject:
-                    e.target.value,
-                })
-            }
-          />
-
+          {/* BANK */}
 
           <Select
-            label="Guarantee Type"
+
+            label="Bank"
+
             required
+
             error={
-              errors.guaranteeTypeId
+              errors.bankId
             }
+
             value={
-              form.guaranteeTypeId
+              form.bankId
             }
+
             onChange={
-              (e) =>
-                setForm({
-                  ...form,
-                  guaranteeTypeId:
-                    e.target.value,
-                })
-            }
-          >
-
-            <option value="">
-              Select type…
-            </option>
-
-            {guaranteeTypes.map(
-              (type) => (
-
-                <option
-                  key={
-                    type.id
-                  }
-                  value={
-                    type.id
-                  }
-                >
-
-                  {type.code}
-
-                  {
-                    type.typeName
-                      ? ` — ${type.typeName}`
-                      : ''
-                  }
-
-                </option>
-              )
-            )}
-
-          </Select>
-
-
-          <Select
-            label="Issuing Bank"
-            required
-            error={
-              errors.issuingBankId
-            }
-            value={
-              form.issuingBankId
-            }
-            onChange={
-              (e) =>
-                handleBankChange(
-                  e.target.value
+              (
+                event
+              ) =>
+                change(
+                  'bankId',
+                  event.target.value
                 )
             }
           >
 
             <option value="">
-              Select bank…
+              Select bank...
             </option>
 
-            {banks.map(
-              (bank) => (
 
-                <option
-                  key={
-                    bank.id
-                  }
-                  value={
-                    bank.id
-                  }
-                >
+            {
+              banks.map(
+                (
+                  bank
+                ) => (
 
-                  {bank.bankName}
+                  <option
+                    key={
+                      bank.id
+                    }
+                    value={
+                      bank.id
+                    }
+                  >
 
-                  {
-                    bank.branch
-                      ? ` — ${bank.branch}`
-                      : ''
-                  }
+                    {
+                      bank.bankName
+                    }
 
-                </option>
+                    {
+                      bank.branch
+                        ? ` — ${bank.branch}`
+                        : ''
+                    }
+
+                  </option>
+                )
               )
-            )}
+            }
 
           </Select>
 
 
+          {/* FD NUMBER */}
+
           <Input
-            label="BG No."
+
+            label="FD Number"
+
             required
+
             error={
-              errors.bgNo
+              errors.fdNumber
             }
+
             value={
-              form.bgNo
+              form.fdNumber
             }
+
             onChange={
-              (e) =>
-                setForm({
-                  ...form,
-                  bgNo:
-                    e.target.value,
-                })
+              (
+                event
+              ) =>
+                change(
+                  'fdNumber',
+                  event.target.value
+                )
             }
           />
 
 
+          {/* FD AMOUNT */}
+
           <Input
-            label="BG Amount"
-            type="number"
-            min="0.01"
-            step="0.01"
+
+            label="FD Amount"
+
             required
+
+            type="number"
+
             error={
-              errors.bgAmount
+              errors.fdAmount
             }
+
             value={
-              form.bgAmount
+              form.fdAmount
             }
+
             onChange={
-              (e) =>
-                setForm({
-                  ...form,
-                  bgAmount:
-                    e.target.value,
-                })
+              (
+                event
+              ) =>
+                change(
+                  'fdAmount',
+                  event.target.value
+                )
             }
           />
 
 
+          {/* CREATION DATE */}
+
           <Input
-            label="Interest Rate (%)"
+
+            label="FD Creation Date"
+
+            type="date"
+
+            value={
+              form.fdCreationDate
+            }
+
+            onChange={
+              (
+                event
+              ) =>
+                change(
+                  'fdCreationDate',
+                  event.target.value
+                )
+            }
+          />
+
+
+          {/* MATURITY */}
+
+          <Input
+
+            label="FD Maturity Date"
+
+            type="date"
+
+            error={
+              errors.fdMaturityDate
+            }
+
+            value={
+              form.fdMaturityDate
+            }
+
+            onChange={
+              (
+                event
+              ) =>
+                change(
+                  'fdMaturityDate',
+                  event.target.value
+                )
+            }
+          />
+
+
+          {/* PERIOD */}
+
+          <Input
+
+            label="Period"
+
             type="number"
-            step="0.01"
+
+            value={
+              form.period
+            }
+
+            onChange={
+              (
+                event
+              ) =>
+                change(
+                  'period',
+                  event.target.value
+                )
+            }
+          />
+
+
+          {/* RATE */}
+
+          <Input
+
+            label="Rate (%)"
+
+            type="number"
+
             value={
               form.interestRate
             }
+
             onChange={
-              (e) =>
-                setForm({
-                  ...form,
-                  interestRate:
-                    e.target.value,
-                })
+              (
+                event
+              ) =>
+                change(
+                  'interestRate',
+                  event.target.value
+                )
             }
           />
 
 
-          <Input
-            label="Bank Charges"
-            type="number"
-            step="0.01"
-            value={
-              form.bankCharges
-            }
-            onChange={
-              (e) =>
-                setForm({
-                  ...form,
-                  bankCharges:
-                    e.target.value,
-                })
-            }
-          />
-
-
-          <Input
-            label="Issue Date"
-            type="date"
-            value={
-              form.issueDate
-            }
-            onChange={
-              (e) =>
-                setForm({
-                  ...form,
-                  issueDate:
-                    e.target.value,
-                })
-            }
-          />
-
-
-          <Input
-            label="Expiry Date"
-            type="date"
-            value={
-              form.expiryDate
-            }
-            onChange={
-              (e) =>
-                setForm({
-                  ...form,
-                  expiryDate:
-                    e.target.value,
-                })
-            }
-          />
-
-
-          <Input
-            label="Claim Expiry Date"
-            type="date"
-            value={
-              form.claimExpiryDate
-            }
-            onChange={
-              (e) =>
-                setForm({
-                  ...form,
-                  claimExpiryDate:
-                    e.target.value,
-                })
-            }
-          />
-
-
-          <Input
-            label="Duration / Claim Period"
-            placeholder="e.g. 12 months + 3 months claim"
-            value={
-              form.durationClaimPeriod
-            }
-            onChange={
-              (e) =>
-                setForm({
-                  ...form,
-                  durationClaimPeriod:
-                    e.target.value,
-                })
-            }
-          />
-
+          {/* STATUS */}
 
           <Select
+
             label="Status"
+
             value={
               form.status
             }
+
             onChange={
-              (e) =>
-                setForm({
-                  ...form,
-                  status:
-                    e.target.value,
-                })
+              (
+                event
+              ) =>
+                change(
+                  'status',
+                  event.target.value
+                )
             }
           >
 
-            {Object.values(
-              INSTRUMENT_STATUS
-            ).map(
-              (status) => (
+            <option value="OPEN">
+              OPEN
+            </option>
 
-                <option
-                  key={
-                    status
-                  }
-                  value={
-                    status
-                  }
-                >
-                  {status}
-                </option>
-              )
-            )}
+            <option value="LIEN_MARKED">
+              LIEN-MARKED
+            </option>
+
+            <option value="CLOSED">
+              CLOSED
+            </option>
 
           </Select>
-
-
-          {!editing && (
-
-            <BgFdLinkSection
-
-              enabled={
-                linkFd
-              }
-
-              onEnabledChange={
-                (checked) => {
-
-                  setLinkFd(
-                    checked
-                  )
-
-                  if (
-                    !checked
-                  ) {
-
-                    setSelectedFdId('')
-
-                    setLinkedAmount('')
-                  }
-                }
-              }
-
-              groupCompanyId={
-                form.groupCompanyId
-              }
-
-              issuingBankId={
-                form.issuingBankId
-              }
-
-              eligibleFds={
-                eligibleFds
-              }
-
-              selectedFdId={
-                selectedFdId
-              }
-
-              onSelectedFdChange={
-                handleFdSelection
-              }
-
-              linkedAmount={
-                linkedAmount
-              }
-
-              onLinkedAmountChange={
-                setLinkedAmount
-              }
-
-              errors={
-                errors
-              }
-            />
-          )}
 
         </form>
 
       </Modal>
 
 
+      {/* =====================================================
+          DELETE CONFIRM
+      ===================================================== */}
+
       <ConfirmDialog
+
         open={
-          !!deleteTarget
+          Boolean(
+            deleteTarget
+          )
         }
-        message="This will permanently remove this Bank Guarantee record. Linked FDs must be removed first."
+
+        title="Are you sure?"
+
+        message={
+          `This will permanently remove this Fixed Deposit. A linked FD cannot be deleted.`
+        }
+
         onCancel={
-          () =>
-            setDeleteTarget(
-              null
-            )
+          () => {
+
+            if (
+              !deleting
+            ) {
+
+              setDeleteTarget(
+                null
+              )
+            }
+          }
         }
+
         onConfirm={
           handleDelete
         }
+
         loading={
           deleting
         }
       />
+
+
+      {/* =====================================================
+          DELETE BLOCKED
+      ===================================================== */}
+
+      <Modal
+
+        open={
+          Boolean(
+            deleteBlocked
+          )
+        }
+
+        onClose={
+          () =>
+            setDeleteBlocked(
+              null
+            )
+        }
+
+        title="Cannot Delete Fixed Deposit"
+
+        size="sm"
+
+        footer={
+
+          <Button
+
+            variant="primary"
+
+            onClick={
+              () =>
+                setDeleteBlocked(
+                  null
+                )
+            }
+          >
+
+            Close
+
+          </Button>
+        }
+      >
+
+        <p className="text-sm leading-6 text-muted">
+
+          {
+            deleteBlocked?.message
+          }
+
+        </p>
+
+
+        <p className="mt-3 text-sm text-muted">
+
+          Go to <strong>FD Linking</strong> and unlink this Fixed Deposit from all BG/LC records first.
+
+        </p>
+
+      </Modal>
 
     </div>
   )

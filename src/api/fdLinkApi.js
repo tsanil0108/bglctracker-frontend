@@ -38,7 +38,7 @@ export const fdLinkApi = {
 
     axiosClient
       .get(
-        `/fd-links/bg/${bgId}`
+        `/fd-links/by-bg/${bgId}`
       )
       .then(
         (response) =>
@@ -52,7 +52,7 @@ export const fdLinkApi = {
 
     axiosClient
       .get(
-        `/fd-links/lc/${lcId}`
+        `/fd-links/by-lc/${lcId}`
       )
       .then(
         (response) =>
@@ -66,7 +66,7 @@ export const fdLinkApi = {
 
     axiosClient
       .get(
-        `/fd-links/fd/${fdId}`
+        `/fd-links/by-fd/${fdId}`
       )
       .then(
         (response) =>

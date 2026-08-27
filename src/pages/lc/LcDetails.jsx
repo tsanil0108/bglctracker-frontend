@@ -1,6 +1,10 @@
-﻿import React, { useEffect, useState, useCallback } from 'react'
+﻿import React, {
+  useCallback,
+  useEffect,
+  useState,
+} from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, Plus, Trash2 } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2, Link2 } from 'lucide-react'
 import PageHeader from '../../components/common/PageHeader'
 import Button from '../../components/common/Button'
 import Modal from '../../components/common/Modal'
@@ -13,6 +17,8 @@ import { extractErrorMessage } from '../../api/axiosClient'
 import { lcApi } from '../../api/lcApi'
 import { lcAmendmentApi } from '../../api/lcAmendmentApi'
 import { lcUtilizationApi } from '../../api/lcUtilizationApi'
+import { fdLinkApi } from '../../api/fdLinkApi'
+import { fdApi } from '../../api/fdApi'
 import { bankApi, vendorApi } from '../../api/masterApi'
 import {
   LC_AMENDMENT_TYPES, DOCUMENT_STATUS_OPTIONS, PAYMENT_STATUS_OPTIONS,
@@ -38,12 +44,17 @@ export default function LcDetails() {
   const [loading, setLoading] = useState(true)
   const [banks, setBanks] = useState([])
   const [vendors, setVendors] = useState([])
+  const [fdLinks, setFdLinks] = useState([])
+  const [fds, setFds] = useState([])
+  const [fdLinksLoading, setFdLinksLoading] = useState(false)
 
   const [amendments, setAmendments] = useState([])
   const [amendModalOpen, setAmendModalOpen] = useState(false)
   const [amendForm, setAmendForm] = useState(emptyAmendment)
   const [amendErrors, setAmendErrors] = useState({})
   const [amendSaving, setAmendSaving] = useState(false)
+  const [deleteAmendTarget, setDeleteAmendTarget] = useState(null)
+  const [deletingAmend, setDeletingAmend] = useState(false)
 
   const [utilizations, setUtilizations] = useState([])
   const [summary, setSummary] = useState(null)
@@ -82,9 +93,29 @@ export default function LcDetails() {
     } catch { /* non-critical */ }
   }, [id])
 
+
+  const loadFdLinks = useCallback(async () => {
+    setFdLinksLoading(true)
+    try {
+      const [linkData, fdData] = await Promise.all([
+        fdLinkApi.getByLc(id),
+        fdApi.getAll(),
+      ])
+
+      setFdLinks(Array.isArray(linkData) ? linkData : [])
+      setFds(Array.isArray(fdData) ? fdData : [])
+    } catch {
+      setFdLinks([])
+      setFds([])
+    } finally {
+      setFdLinksLoading(false)
+    }
+  }, [id])
+
   useEffect(() => { loadLc() }, [loadLc])
   useEffect(() => { loadAmendments() }, [loadAmendments])
   useEffect(() => { loadUtilizations() }, [loadUtilizations])
+  useEffect(() => { loadFdLinks() }, [loadFdLinks])
   useEffect(() => {
     bankApi.getAll().then(setBanks).catch(() => {})
     vendorApi.getAll().then(setVendors).catch(() => {})
@@ -129,6 +160,22 @@ export default function LcDetails() {
       push(extractErrorMessage(err, 'Could not save the amendment.'), 'error')
     } finally {
       setAmendSaving(false)
+    }
+  }
+
+  const handleDeleteAmendment = async () => {
+    if (!deleteAmendTarget?.id) return
+
+    setDeletingAmend(true)
+    try {
+      await lcAmendmentApi.remove(id, deleteAmendTarget.id)
+      push('Amendment deleted and LC restored.')
+      setDeleteAmendTarget(null)
+      await Promise.all([loadLc(), loadAmendments()])
+    } catch (err) {
+      push(extractErrorMessage(err, 'Could not delete the amendment.'), 'error')
+    } finally {
+      setDeletingAmend(false)
     }
   }
 
@@ -203,7 +250,17 @@ export default function LcDetails() {
         eyebrow="Letter of Credit"
         title={lc.lcNo}
         description={lc.linkedVendorName || 'No vendor linked'}
-        actions={<StatusBadge status={lc.status} />}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <Link to="/fd-linking">
+              <Button variant="outline">
+                <Link2 size={16} />
+                Manage FD Links
+              </Button>
+            </Link>
+            <StatusBadge status={lc.status} />
+          </div>
+        }
       />
 
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -235,6 +292,151 @@ export default function LcDetails() {
         </div>
       </div>
 
+
+      {/* LC Details */}
+      <div className="mb-6 rounded-xl2 border border-border bg-white p-5">
+        <h2 className="font-display text-lg font-semibold text-ink-900">
+          Letter of Credit Details
+        </h2>
+
+        <div className="mt-5 grid grid-cols-1 gap-x-8 gap-y-5 sm:grid-cols-2 lg:grid-cols-4">
+          <DetailItem label="Group Company" value={lc.groupCompanyName} />
+          <DetailItem label="Vendor / Beneficiary" value={lc.linkedVendorName} />
+          <DetailItem label="Issue Bank" value={lc.issueBankName} />
+          <DetailItem label="LC Period Type" value={lc.lcPeriodType} />
+
+          <DetailItem label="LC Creation Date" value={formatDate(lc.lcCreationDate)} />
+          <DetailItem label="LC Expiry Date" value={formatDate(lc.lcExpiryDate)} />
+          <DetailItem label="LC Amount" value={formatCurrency(lc.lcAmount)} />
+          <DetailItem
+            label="Interest Rate"
+            value={
+              lc.interestRate === null || lc.interestRate === undefined
+                ? '—'
+                : `${lc.interestRate}%`
+            }
+          />
+
+          <DetailItem label="Bank Charges" value={formatCurrency(lc.bankCharges ?? 0)} />
+          <DetailItem label="Material Receipt Date" value={formatDate(lc.materialReceiptDate)} />
+          <DetailItem label="Acceptance Date" value={formatDate(lc.acceptanceDate)} />
+          <DetailItem label="Payment Date" value={formatDate(lc.paymentDate)} />
+
+          <DetailItem
+            label="Party Bears Interest"
+            value={lc.partyBearsInterest ? 'Yes' : 'No'}
+          />
+          <DetailItem label="Status" value={lc.status} />
+        </div>
+      </div>
+
+      {/* Linked Fixed Deposits */}
+      <div className="mb-6 rounded-xl2 border border-border bg-white p-5">
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="font-display text-lg font-semibold text-ink-900">
+              Linked Fixed Deposits
+            </h2>
+            <p className="mt-1 text-sm text-muted">
+              Fixed Deposits pledged as margin against this Letter of Credit.
+            </p>
+          </div>
+
+          <Link to="/fd-linking">
+            <Button variant="outline" size="sm">
+              <Link2 size={15} />
+              Manage Links
+            </Button>
+          </Link>
+        </div>
+
+        {fdLinksLoading ? (
+          <Loader />
+        ) : fdLinks.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-border px-5 py-10 text-center">
+            <Link2 size={22} className="mx-auto text-muted" />
+            <p className="mt-3 text-sm font-medium text-ink-900">
+              No Fixed Deposits Linked
+            </p>
+            <p className="mt-1 text-sm text-muted">
+              No FD margin is currently pledged against this LC.
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted">
+                  <th className="py-2 pr-4">FD Number</th>
+                  <th className="py-2 pr-4">Bank</th>
+                  <th className="py-2 pr-4">FD Amount</th>
+                  <th className="py-2 pr-4">Linked Amount</th>
+                  <th className="py-2 pr-4">Available</th>
+                  <th className="py-2 pr-4">Maturity</th>
+                  <th className="py-2">Linked Date</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {fdLinks.map((link) => {
+                  const fd = fds.find(
+                    (item) => String(item.id) === String(link.fdId)
+                  )
+
+                  return (
+                    <tr key={link.id} className="border-b border-border/70">
+                      <td className="py-3 pr-4 font-mono font-semibold text-ink-900">
+                        {link.fdNo || fd?.fdNumber || '—'}
+                      </td>
+                      <td className="py-3 pr-4">
+                        {fd?.bankName || '—'}
+                      </td>
+                      <td className="py-3 pr-4 num">
+                        {formatCurrency(fd?.fdAmount ?? 0)}
+                      </td>
+                      <td className="py-3 pr-4 num font-semibold">
+                        {formatCurrency(link.linkedAmount ?? 0)}
+                      </td>
+                      <td className="py-3 pr-4 num">
+                        {formatCurrency(
+                          fd?.availableAmount ??
+                          fd?.fdAmount ??
+                          0
+                        )}
+                      </td>
+                      <td className="py-3 pr-4">
+                        {formatDate(fd?.fdMaturityDate)}
+                      </td>
+                      <td className="py-3">
+                        {formatDate(link.linkedDate)}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {fdLinks.length > 0 && (
+          <div className="mt-4 flex justify-end">
+            <div className="rounded-xl bg-ink-50 px-4 py-3">
+              <p className="text-[10px] uppercase tracking-wide text-muted">
+                Total FD Margin Linked
+              </p>
+              <p className="mt-1 num text-base font-semibold text-ink-900">
+                {formatCurrency(
+                  fdLinks.reduce(
+                    (total, item) => total + Number(item.linkedAmount ?? 0),
+                    0
+                  )
+                )}
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Amendments */}
       <div className="mb-6 rounded-xl2 border border-border bg-white p-5">
         <div className="mb-4 flex items-center justify-between">
@@ -249,28 +451,50 @@ export default function LcDetails() {
               Amount: {formatCurrency(amendments?.[0]?.previousLcAmount ?? lc.lcAmount)} · Expiry: {formatDate(amendments?.[0]?.previousExpiryDate ?? lc.lcExpiryDate)}
             </p>
           </li>
-          {amendments.map((a) => (
-            <li key={a.id}>
-              <p className="text-sm font-medium text-ink-900">Amendment #{a.amendmentNumber} — {LC_AMENDMENT_TYPES[a.amendmentType]}</p>
-              <p className="text-xs text-muted">{formatDate(a.amendmentDate)}</p>
-              <div className="mt-1 space-y-0.5 text-xs text-ink-900">
-                {a.previousLcAmount !== a.newLcAmount && (
-                  <p>Amount: {formatCurrency(a.previousLcAmount)} → {formatCurrency(a.newLcAmount)}</p>
-                )}
-                {a.previousExpiryDate !== a.newExpiryDate && (
-                  <p>Expiry: {formatDate(a.previousExpiryDate)} → {formatDate(a.newExpiryDate)}</p>
-                )}
-                {a.previousVendorName !== a.newVendorName && (
-                  <p>Vendor: {a.previousVendorName || '—'} → {a.newVendorName || '—'}</p>
-                )}
-                {a.previousBankName !== a.newBankName && (
-                  <p>Bank: {a.previousBankName || '—'} → {a.newBankName || '—'}</p>
-                )}
-                {a.reason && <p className="text-muted">Reason: {a.reason}</p>}
-                {a.remarks && <p className="text-muted">Remarks: {a.remarks}</p>}
-              </div>
-            </li>
-          ))}
+          {amendments.map((a, index) => {
+            const isLatest = index === amendments.length - 1
+
+            return (
+              <li key={a.id}>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-ink-900">
+                      Amendment #{a.amendmentNumber} — {LC_AMENDMENT_TYPES[a.amendmentType] || a.amendmentType}
+                    </p>
+                    <p className="text-xs text-muted">{formatDate(a.amendmentDate)}</p>
+                    <div className="mt-1 space-y-0.5 text-xs text-ink-900">
+                      {a.previousLcAmount !== a.newLcAmount && (
+                        <p>Amount: {formatCurrency(a.previousLcAmount)} → {formatCurrency(a.newLcAmount)}</p>
+                      )}
+                      {a.previousExpiryDate !== a.newExpiryDate && (
+                        <p>Expiry: {formatDate(a.previousExpiryDate)} → {formatDate(a.newExpiryDate)}</p>
+                      )}
+                      {a.previousVendorName !== a.newVendorName && (
+                        <p>Vendor: {a.previousVendorName || '—'} → {a.newVendorName || '—'}</p>
+                      )}
+                      {a.previousBankName !== a.newBankName && (
+                        <p>Bank: {a.previousBankName || '—'} → {a.newBankName || '—'}</p>
+                      )}
+                      {a.reason && <p className="text-muted">Reason: {a.reason}</p>}
+                      {a.remarks && <p className="text-muted">Remarks: {a.remarks}</p>}
+                    </div>
+                  </div>
+
+                  {isLatest && (
+                    <button
+                      type="button"
+                      onClick={() => setDeleteAmendTarget(a)}
+                      className="shrink-0 rounded-lg border border-red-200 p-2 text-red-600 transition hover:bg-red-50"
+                      title="Delete latest amendment"
+                      aria-label="Delete amendment"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  )}
+                </div>
+              </li>
+            )
+          })}
           {amendments.length === 0 && <li className="text-xs text-muted">No amendments recorded yet.</li>}
         </ol>
       </div>
@@ -376,6 +600,24 @@ export default function LcDetails() {
       </Modal>
 
       <ConfirmDialog
+        open={!!deleteAmendTarget}
+        title="Delete Amendment?"
+        message={
+          deleteAmendTarget
+            ? `Amendment #${deleteAmendTarget.amendmentNumber} will be deleted and the LC will be restored to its previous values. This action cannot be undone.`
+            : ''
+        }
+        confirmText="Delete Amendment"
+        loadingText="Deleting…"
+        confirmVariant="danger"
+        onCancel={() => {
+          if (!deletingAmend) setDeleteAmendTarget(null)
+        }}
+        onConfirm={handleDeleteAmendment}
+        loading={deletingAmend}
+      />
+
+      <ConfirmDialog
         open={!!deleteUtilTarget}
         message="This will permanently remove this utilization entry. This can't be undone."
         onCancel={() => setDeleteUtilTarget(null)}
@@ -385,3 +627,17 @@ export default function LcDetails() {
     </div>
   )
 }
+
+function DetailItem({ label, value }) {
+  return (
+    <div>
+      <p className="text-xs font-medium uppercase tracking-wide text-muted">
+        {label}
+      </p>
+      <p className="mt-1 text-sm font-medium text-ink-900">
+        {value === null || value === undefined || value === '' ? '—' : value}
+      </p>
+    </div>
+  )
+}
+

@@ -9,13 +9,13 @@ import {
   Download,
   Eye,
   FileText,
-  Trash2,
-  Upload,
   History,
-  Plus,
-  Link2,
-  Unlink,
   Landmark,
+  Link2,
+  Plus,
+  Trash2,
+  Unlink,
+  Upload,
 } from 'lucide-react'
 
 import {
@@ -28,6 +28,7 @@ import Card from '../../components/common/Card'
 import Button from '../../components/common/Button'
 import Loader from '../../components/common/Loader'
 import StatusBadge from '../../components/common/StatusBadge'
+import ConfirmDialog from '../../components/common/ConfirmDialog'
 
 import {
   Input,
@@ -73,11 +74,11 @@ const DOCUMENT_TYPES = [
 
 function safeNumber(value) {
 
-  const parsed =
+  const number =
     Number(value)
 
-  return Number.isFinite(parsed)
-    ? parsed
+  return Number.isFinite(number)
+    ? number
     : 0
 }
 
@@ -86,7 +87,6 @@ export default function BgDetails() {
 
   const { id } =
     useParams()
-
 
   const { push } =
     useToast()
@@ -99,40 +99,37 @@ export default function BgDetails() {
   const [
     bg,
     setBg,
-  ] =
-    useState(null)
-
+  ] = useState(null)
 
   const [
     loading,
     setLoading,
-  ] =
-    useState(true)
+  ] = useState(true)
 
 
   // =========================================================
-  // LINKED FD
+  // LINKED FIXED DEPOSITS
   // =========================================================
 
   const [
     linkedFds,
     setLinkedFds,
-  ] =
-    useState([])
-
+  ] = useState([])
 
   const [
     linksLoading,
     setLinksLoading,
-  ] =
-    useState(false)
+  ] = useState(false)
 
+  const [
+    unlinkTarget,
+    setUnlinkTarget,
+  ] = useState(null)
 
   const [
     unlinkingId,
     setUnlinkingId,
-  ] =
-    useState(null)
+  ] = useState(null)
 
 
   // =========================================================
@@ -142,46 +139,37 @@ export default function BgDetails() {
   const [
     documents,
     setDocuments,
-  ] =
-    useState([])
-
+  ] = useState([])
 
   const [
     documentsLoading,
     setDocumentsLoading,
-  ] =
-    useState(false)
-
-
-  const [
-    uploadForm,
-    setUploadForm,
-  ] =
-    useState({
-
-      documentType:
-        'Original BG',
-
-      remarks:
-        '',
-
-      file:
-        null,
-    })
-
+  ] = useState(false)
 
   const [
     uploading,
     setUploading,
-  ] =
-    useState(false)
-
+  ] = useState(false)
 
   const [
     deletingDocumentId,
     setDeletingDocumentId,
-  ] =
-    useState(null)
+  ] = useState(null)
+
+  const [
+    uploadForm,
+    setUploadForm,
+  ] = useState({
+
+    documentType:
+      'Original BG',
+
+    remarks:
+      '',
+
+    file:
+      null,
+  })
 
 
   // =========================================================
@@ -191,6 +179,10 @@ export default function BgDetails() {
   const loadBg =
     async () => {
 
+      setLinksLoading(
+        true
+      )
+
       try {
 
         const data =
@@ -198,11 +190,17 @@ export default function BgDetails() {
             id
           )
 
-
         setBg(
           data
         )
 
+        setLinkedFds(
+          Array.isArray(
+            data?.linkedFds
+          )
+            ? data.linkedFds
+            : []
+        )
 
       } catch (error) {
 
@@ -211,6 +209,13 @@ export default function BgDetails() {
           error
         )
 
+        setBg(
+          null
+        )
+
+        setLinkedFds(
+          []
+        )
 
         push(
           extractErrorMessage(
@@ -219,55 +224,6 @@ export default function BgDetails() {
           ),
           'error'
         )
-      }
-    }
-
-
-  // =========================================================
-  // LOAD LINKED FDS
-  // =========================================================
-
-  const loadLinkedFds =
-    async () => {
-
-      setLinksLoading(
-        true
-      )
-
-
-      try {
-
-        const data =
-          await fdLinkApi.getByBg(
-            id
-          )
-
-
-        console.log(
-          'BG LINKED FDS:',
-          data
-        )
-
-
-        setLinkedFds(
-          Array.isArray(data)
-            ? data
-            : []
-        )
-
-
-      } catch (error) {
-
-        console.error(
-          'Linked FD load error:',
-          error
-        )
-
-
-        setLinkedFds(
-          []
-        )
-
 
       } finally {
 
@@ -289,7 +245,6 @@ export default function BgDetails() {
         true
       )
 
-
       try {
 
         const data =
@@ -298,21 +253,18 @@ export default function BgDetails() {
             id
           )
 
-
         setDocuments(
           Array.isArray(data)
             ? data
             : []
         )
 
-
       } catch (error) {
 
         console.error(
-          'Document load error:',
+          'BG document load error:',
           error
         )
-
 
       } finally {
 
@@ -330,22 +282,19 @@ export default function BgDetails() {
   useEffect(
     () => {
 
-      const load =
+      const init =
         async () => {
 
           setLoading(
             true
           )
 
-
           try {
 
             await Promise.all([
               loadBg(),
-              loadLinkedFds(),
               loadDocuments(),
             ])
-
 
           } finally {
 
@@ -355,8 +304,7 @@ export default function BgDetails() {
           }
         }
 
-
-      load()
+      init()
 
       // eslint-disable-next-line react-hooks/exhaustive-deps
     },
@@ -365,28 +313,29 @@ export default function BgDetails() {
 
 
   // =========================================================
-  // LINK SUMMARY
+  // FD TOTAL
   // =========================================================
 
   const totalLinkedAmount =
     useMemo(
-      () =>
+      () => {
 
-        linkedFds.reduce(
+        return linkedFds.reduce(
           (
             total,
-            link
-          ) =>
+            item
+          ) => {
 
-            total +
-            safeNumber(
-              link.linkedAmount ??
-              link.amount
-            ),
-
+            return (
+              total +
+              safeNumber(
+                item.linkedAmount
+              )
+            )
+          },
           0
-        ),
-
+        )
+      },
       [
         linkedFds,
       ]
@@ -397,79 +346,60 @@ export default function BgDetails() {
   // UNLINK FD
   // =========================================================
 
-  const handleUnlinkFd =
-    async (
-      link
-    ) => {
+  const handleConfirmUnlink =
+    async () => {
 
-      const fdNumber =
-        link.fdNumber ??
-        link.fixedDepositNumber ??
-        link.fixedDeposit?.fdNumber ??
-        link.fixedDeposit?.fdNumber ??
-        'Fixed Deposit'
+      if (
+        !unlinkTarget
+      ) {
+        return
+      }
 
 
-      const linkedAmount =
-        safeNumber(
-          link.linkedAmount ??
-          link.amount
-        )
-
-
-      const confirmed =
-        window.confirm(
-          `Unlink ${fdNumber}?\n\n` +
-          `${formatCurrency(linkedAmount)} will be released from this Bank Guarantee.\n\n` +
-          `The Fixed Deposit itself will NOT be deleted.`
-        )
+      const linkId =
+        unlinkTarget.linkId ??
+        unlinkTarget.id
 
 
       if (
-        !confirmed
+        !linkId
       ) {
+
+        push(
+          'FD link ID is missing.',
+          'error'
+        )
 
         return
       }
 
 
       setUnlinkingId(
-        link.id
+        linkId
       )
 
 
       try {
 
         await fdLinkApi.remove(
-          link.id
+          linkId
         )
-
 
         push(
-          `${fdNumber} unlinked successfully.`
+          `${
+            getFdNumber(
+              unlinkTarget
+            )
+          } unlinked successfully.`
         )
 
+        setUnlinkTarget(
+          null
+        )
 
-        /*
-         * Refresh both.
-         *
-         * BG linked count
-         * +
-         * FD link list
-         */
-        await Promise.all([
-          loadLinkedFds(),
-          loadBg(),
-        ])
-
+        await loadBg()
 
       } catch (error) {
-
-        console.error(
-          'FD unlink error:',
-          error
-        )
-
 
         push(
           extractErrorMessage(
@@ -478,7 +408,6 @@ export default function BgDetails() {
           ),
           'error'
         )
-
 
       } finally {
 
@@ -490,7 +419,7 @@ export default function BgDetails() {
 
 
   // =========================================================
-  // UPLOAD DOCUMENT
+  // DOCUMENT UPLOAD
   // =========================================================
 
   const handleUpload =
@@ -509,19 +438,6 @@ export default function BgDetails() {
       }
 
 
-      if (
-        !uploadForm.documentType
-      ) {
-
-        push(
-          'Please select document type.',
-          'error'
-        )
-
-        return
-      }
-
-
       setUploading(
         true
       )
@@ -530,15 +446,10 @@ export default function BgDetails() {
       try {
 
         await documentApi.upload(
-
           'BG',
-
           id,
-
           uploadForm.documentType,
-
           uploadForm.file,
-
           uploadForm.remarks
         )
 
@@ -561,31 +472,23 @@ export default function BgDetails() {
         })
 
 
-        const fileInput =
-          window.document.getElementById(
+        const input =
+          document.getElementById(
             'bg-document-file'
           )
 
-
         if (
-          fileInput
+          input
         ) {
 
-          fileInput.value =
+          input.value =
             ''
         }
 
 
         await loadDocuments()
 
-
       } catch (error) {
-
-        console.error(
-          'Document upload error:',
-          error
-        )
-
 
         push(
           extractErrorMessage(
@@ -594,7 +497,6 @@ export default function BgDetails() {
           ),
           'error'
         )
-
 
       } finally {
 
@@ -616,28 +518,27 @@ export default function BgDetails() {
 
       try {
 
-        const response =
-          await documentApi.view(
+        /*
+         * download() returns blob in the API version
+         * we were using earlier.
+         */
+        const blob =
+          await documentApi.download(
             doc.id
           )
 
 
-        const contentType =
-          response.contentType ||
-          doc.fileType ||
-          'application/octet-stream'
-
-
         const fileBlob =
-          new Blob(
-            [
-              response.blob,
-            ],
-            {
-              type:
-                contentType,
-            }
-          )
+          blob instanceof Blob
+            ? blob
+            : new Blob(
+                [blob],
+                {
+                  type:
+                    doc.fileType ||
+                    'application/octet-stream',
+                }
+              )
 
 
         const url =
@@ -646,30 +547,11 @@ export default function BgDetails() {
           )
 
 
-        const newWindow =
-          window.open(
-            url,
-            '_blank',
-            'noopener,noreferrer'
-          )
-
-
-        if (
-          !newWindow
-        ) {
-
-          push(
-            'Popup was blocked. Please allow popups to view the document.',
-            'error'
-          )
-
-
-          window.URL.revokeObjectURL(
-            url
-          )
-
-          return
-        }
+        window.open(
+          url,
+          '_blank',
+          'noopener,noreferrer'
+        )
 
 
         setTimeout(
@@ -678,18 +560,16 @@ export default function BgDetails() {
             window.URL.revokeObjectURL(
               url
             )
-
           },
           60000
         )
-
 
       } catch (error) {
 
         push(
           extractErrorMessage(
             error,
-            'Could not open document.'
+            'Could not view document.'
           ),
           'error'
         )
@@ -708,28 +588,23 @@ export default function BgDetails() {
 
       try {
 
-        const response =
+        const blob =
           await documentApi.download(
             doc.id
           )
 
 
-        const contentType =
-          response.contentType ||
-          doc.fileType ||
-          'application/octet-stream'
-
-
         const fileBlob =
-          new Blob(
-            [
-              response.blob,
-            ],
-            {
-              type:
-                contentType,
-            }
-          )
+          blob instanceof Blob
+            ? blob
+            : new Blob(
+                [blob],
+                {
+                  type:
+                    doc.fileType ||
+                    'application/octet-stream',
+                }
+              )
 
 
         const url =
@@ -739,7 +614,7 @@ export default function BgDetails() {
 
 
         const anchor =
-          window.document.createElement(
+          document.createElement(
             'a'
           )
 
@@ -747,19 +622,16 @@ export default function BgDetails() {
         anchor.href =
           url
 
-
         anchor.download =
           doc.fileName ||
           'document'
 
 
-        window.document.body.appendChild(
+        document.body.appendChild(
           anchor
         )
 
-
         anchor.click()
-
 
         anchor.remove()
 
@@ -767,7 +639,6 @@ export default function BgDetails() {
         window.URL.revokeObjectURL(
           url
         )
-
 
       } catch (error) {
 
@@ -800,7 +671,6 @@ export default function BgDetails() {
       if (
         !confirmed
       ) {
-
         return
       }
 
@@ -824,7 +694,6 @@ export default function BgDetails() {
 
         await loadDocuments()
 
-
       } catch (error) {
 
         push(
@@ -834,7 +703,6 @@ export default function BgDetails() {
           ),
           'error'
         )
-
 
       } finally {
 
@@ -874,10 +742,6 @@ export default function BgDetails() {
   }
 
 
-  // =========================================================
-  // PAGE
-  // =========================================================
-
   return (
 
     <div>
@@ -895,7 +759,13 @@ export default function BgDetails() {
         }
 
         description={
-          `${bg.groupCompanyName || 'Unassigned'} · ${bg.issuingBankName || '—'}`
+          `${
+            bg.groupCompanyName ||
+            'Unassigned'
+          } · ${
+            bg.issuingBankName ||
+            '—'
+          }`
         }
 
         actions={
@@ -927,7 +797,7 @@ export default function BgDetails() {
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
 
-        <Summary
+        <SummaryCard
 
           label="BG Amount"
 
@@ -939,7 +809,7 @@ export default function BgDetails() {
         />
 
 
-        <Summary
+        <SummaryCard
 
           label="Client"
 
@@ -950,7 +820,7 @@ export default function BgDetails() {
         />
 
 
-        <Summary
+        <SummaryCard
 
           label="Expiry"
 
@@ -962,7 +832,7 @@ export default function BgDetails() {
         />
 
 
-        <Summary
+        <SummaryCard
 
           label="FD Margin Linked"
 
@@ -970,10 +840,6 @@ export default function BgDetails() {
             formatCurrency(
               totalLinkedAmount
             )
-          }
-
-          highlight={
-            totalLinkedAmount > 0
           }
         />
 
@@ -983,7 +849,6 @@ export default function BgDetails() {
           <p className="text-xs uppercase tracking-wide text-muted">
             Status
           </p>
-
 
           <div className="mt-3">
 
@@ -1001,7 +866,7 @@ export default function BgDetails() {
 
 
       {/* ======================================================
-          BASIC DETAILS
+          BANK GUARANTEE DETAILS
       ====================================================== */}
 
       <Card className="mt-6">
@@ -1014,64 +879,47 @@ export default function BgDetails() {
         <div className="mt-5 grid grid-cols-1 gap-x-8 gap-y-5 md:grid-cols-2 xl:grid-cols-4">
 
           <Info
-
             label="Group Company"
-
             value={
               bg.groupCompanyName ||
-              'Unassigned'
+              '—'
             }
           />
 
-
           <Info
-
             label="Issuing Bank"
-
             value={
               bg.issuingBankName ||
               '—'
             }
           />
 
-
           <Info
-
             label="Client"
-
             value={
               bg.clientName ||
               '—'
             }
           />
 
-
           <Info
-
             label="Site / Project"
-
             value={
               bg.siteProject ||
               '—'
             }
           />
 
-
           <Info
-
             label="Guarantee Type"
-
             value={
               bg.guaranteeTypeCode ||
               '—'
             }
           />
 
-
           <Info
-
             label="Issue Date"
-
             value={
               formatDate(
                 bg.issueDate
@@ -1079,11 +927,8 @@ export default function BgDetails() {
             }
           />
 
-
           <Info
-
             label="Expiry Date"
-
             value={
               formatDate(
                 bg.expiryDate
@@ -1091,11 +936,8 @@ export default function BgDetails() {
             }
           />
 
-
           <Info
-
             label="Claim Expiry"
-
             value={
               formatDate(
                 bg.claimExpiryDate
@@ -1103,11 +945,8 @@ export default function BgDetails() {
             }
           />
 
-
           <Info
-
             label="Interest Rate"
-
             value={
               bg.interestRate != null
                 ? `${bg.interestRate}%`
@@ -1115,11 +954,8 @@ export default function BgDetails() {
             }
           />
 
-
           <Info
-
             label="Bank Charges"
-
             value={
               formatCurrency(
                 bg.bankCharges ||
@@ -1128,11 +964,8 @@ export default function BgDetails() {
             }
           />
 
-
           <Info
-
             label="Duration / Claim Period"
-
             value={
               bg.durationClaimPeriod ||
               '—'
@@ -1184,7 +1017,6 @@ export default function BgDetails() {
           >
 
             <Button
-              type="button"
               variant="outline"
             >
 
@@ -1207,35 +1039,32 @@ export default function BgDetails() {
             ? (
 
                 <div className="mt-6">
-
                   <Loader />
-
                 </div>
+
               )
 
-            : linkedFds.length ===
-              0
+            : linkedFds.length === 0
 
               ? (
 
-                  <div className="mt-6 rounded-xl border border-dashed border-border px-5 py-10 text-center">
+                  <div className="mt-6 rounded-xl border border-dashed border-border px-6 py-12 text-center">
 
                     <Link2
-                      size={26}
+                      size={28}
                       className="mx-auto text-muted"
                     />
 
-
-                    <p className="mt-3 text-sm font-medium text-ink-900">
+                    <p className="mt-3 font-medium text-ink-900">
                       No Fixed Deposit linked
                     </p>
 
-
-                    <p className="mt-1 text-xs text-muted">
+                    <p className="mt-1 text-sm text-muted">
                       This Bank Guarantee currently has no Fixed Deposit pledged against it.
                     </p>
 
                   </div>
+
                 )
 
               : (
@@ -1244,7 +1073,7 @@ export default function BgDetails() {
 
                     <div className="mt-6 overflow-x-auto">
 
-                      <table className="min-w-full text-sm">
+                      <table className="w-full min-w-[1100px] text-sm">
 
                         <thead>
 
@@ -1267,7 +1096,19 @@ export default function BgDetails() {
                             </th>
 
                             <th className="py-3 pr-5">
+                              Available
+                            </th>
+
+                            <th className="py-3 pr-5">
                               Maturity
+                            </th>
+
+                            <th className="py-3 pr-5">
+                              Linked Date
+                            </th>
+
+                            <th className="py-3 pr-5">
+                              Status
                             </th>
 
                             <th className="py-3 text-right">
@@ -1287,79 +1128,76 @@ export default function BgDetails() {
                                 link
                               ) => {
 
-                                const fdNumber =
-                                  getFdNumber(
-                                    link
-                                  )
-
-
-                                const bankName =
-                                  getFdBankName(
-                                    link
-                                  )
-
-
-                                const fdAmount =
-                                  getFdAmount(
-                                    link
-                                  )
-
-
-                                const linkedAmount =
-                                  getLinkedAmount(
-                                    link
-                                  )
-
-
-                                const maturityDate =
-                                  getFdMaturityDate(
-                                    link
-                                  )
-
+                                const linkId =
+                                  link.linkId ??
+                                  link.id
 
                                 return (
 
                                   <tr
                                     key={
-                                      link.id
+                                      linkId
                                     }
                                     className="border-b border-border/70"
                                   >
 
-                                    <td className="py-4 pr-5">
+                                    <td className="py-4 pr-5 font-mono font-semibold text-ink-900">
 
-                                      <p className="font-medium text-ink-900">
-                                        {fdNumber}
-                                      </p>
+                                      {
+                                        getFdNumber(
+                                          link
+                                        )
+                                      }
 
                                     </td>
 
 
                                     <td className="py-4 pr-5">
-                                      {bankName}
+
+                                      {
+                                        getFdBankName(
+                                          link
+                                        )
+                                      }
+
                                     </td>
 
 
                                     <td className="py-4 pr-5 num">
+
                                       {
                                         formatCurrency(
-                                          fdAmount
+                                          getFdAmount(
+                                            link
+                                          )
                                         )
                                       }
+
                                     </td>
 
 
-                                    <td className="py-4 pr-5">
+                                    <td className="py-4 pr-5 num font-semibold">
 
-                                      <span className="num font-semibold text-ink-900">
-
-                                        {
-                                          formatCurrency(
-                                            linkedAmount
+                                      {
+                                        formatCurrency(
+                                          getLinkedAmount(
+                                            link
                                           )
-                                        }
+                                        )
+                                      }
 
-                                      </span>
+                                    </td>
+
+
+                                    <td className="py-4 pr-5 num">
+
+                                      {
+                                        formatCurrency(
+                                          getAvailableAmount(
+                                            link
+                                          )
+                                        )
+                                      }
 
                                     </td>
 
@@ -1367,9 +1205,43 @@ export default function BgDetails() {
                                     <td className="py-4 pr-5">
 
                                       {
-                                        maturityDate
+                                        getFdMaturityDate(
+                                          link
+                                        )
                                           ? formatDate(
-                                              maturityDate
+                                              getFdMaturityDate(
+                                                link
+                                              )
+                                            )
+                                          : '—'
+                                      }
+
+                                    </td>
+
+
+                                    <td className="py-4 pr-5">
+
+                                      {
+                                        link.linkedDate
+                                          ? formatDate(
+                                              link.linkedDate
+                                            )
+                                          : '—'
+                                      }
+
+                                    </td>
+
+
+                                    <td className="py-4 pr-5">
+
+                                      {
+                                        link.status
+                                          ? (
+                                              <StatusBadge
+                                                status={
+                                                  link.status
+                                                }
+                                              />
                                             )
                                           : '—'
                                       }
@@ -1385,31 +1257,24 @@ export default function BgDetails() {
 
                                         disabled={
                                           unlinkingId ===
-                                          link.id
+                                          linkId
                                         }
 
                                         onClick={
                                           () =>
-                                            handleUnlinkFd(
+                                            setUnlinkTarget(
                                               link
                                             )
                                         }
 
-                                        className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
-
-                                        title="Unlink Fixed Deposit"
+                                        className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-50"
                                       >
 
                                         <Unlink
                                           size={15}
                                         />
 
-                                        {
-                                          unlinkingId ===
-                                          link.id
-                                            ? 'Unlinking…'
-                                            : 'Unlink'
-                                        }
+                                        Unlink
 
                                       </button>
 
@@ -1438,25 +1303,7 @@ export default function BgDetails() {
 
                         {' '}
 
-                        This Bank Guarantee cannot be deleted while any Fixed Deposit is linked to it.
-
-                        {' '}
-
-                        Use
-
-                        {' '}
-
-                        <strong>
-                          Unlink
-                        </strong>
-
-                        {' '}
-
-                        first.
-
-                        {' '}
-
-                        Unlinking removes only the BG ↔ FD relationship; the Fixed Deposit itself remains safe.
+                        This Bank Guarantee cannot be deleted while any Fixed Deposit is linked to it. Use <strong>Unlink</strong> first.
 
                       </p>
 
@@ -1465,18 +1312,20 @@ export default function BgDetails() {
 
                     <div className="mt-4 flex justify-end">
 
-                      <div className="rounded-lg bg-ink-50 px-4 py-3">
+                      <div className="rounded-xl bg-ink-50 px-5 py-4">
 
                         <p className="text-xs uppercase tracking-wide text-muted">
                           Total FD Margin Linked
                         </p>
 
-                        <p className="mt-1 num text-lg font-semibold text-ink-900">
+                        <p className="mt-1 num text-xl font-semibold text-ink-900">
+
                           {
                             formatCurrency(
                               totalLinkedAmount
                             )
                           }
+
                         </p>
 
                       </div>
@@ -1504,7 +1353,6 @@ export default function BgDetails() {
 
 
           <Button
-            type="button"
             variant="accent"
           >
 
@@ -1536,9 +1384,7 @@ export default function BgDetails() {
               )
             }
 
-            {' · '}
-
-            Expiry:{' '}
+            {' · Expiry: '}
 
             {
               formatDate(
@@ -1550,21 +1396,14 @@ export default function BgDetails() {
 
 
           {
-            !bg.amendments ||
-            bg.amendments.length ===
-            0
+            Array.isArray(
+              bg.amendments
+            ) &&
+            bg.amendments.length > 0
 
               ? (
 
-                  <p className="mt-5 text-sm text-muted">
-                    No amendments recorded yet.
-                  </p>
-
-                )
-
-              : (
-
-                  <div className="mt-5 space-y-4">
+                  <div className="mt-5 space-y-3">
 
                     {
                       bg.amendments.map(
@@ -1573,22 +1412,27 @@ export default function BgDetails() {
                         ) => (
 
                           <div
-
                             key={
                               amendment.id
                             }
-
-                            className="rounded-lg border border-border p-3"
+                            className="rounded-lg border border-border p-4"
                           >
 
-                            <p className="text-sm font-medium text-ink-900">
-                              Amendment
+                            <p className="font-medium text-ink-900">
+
+                              {
+                                amendment.amendmentNumber
+                                  ? `Amendment ${amendment.amendmentNumber}`
+                                  : 'Amendment'
+                              }
+
                             </p>
 
 
-                            <p className="mt-1 text-xs text-muted">
+                            <p className="mt-1 text-sm text-muted">
 
                               {
+                                amendment.reason ||
                                 amendment.remarks ||
                                 '—'
                               }
@@ -1601,6 +1445,14 @@ export default function BgDetails() {
                     }
 
                   </div>
+
+                )
+
+              : (
+
+                  <p className="mt-5 text-sm text-muted">
+                    No amendments recorded yet.
+                  </p>
                 )
           }
 
@@ -1628,10 +1480,6 @@ export default function BgDetails() {
 
         </div>
 
-
-        {/* =====================================================
-            UPLOAD FORM
-        ===================================================== */}
 
         <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-4">
 
@@ -1676,9 +1524,7 @@ export default function BgDetails() {
                       type
                     }
                   >
-
                     {type}
-
                   </option>
                 )
               )
@@ -1730,6 +1576,8 @@ export default function BgDetails() {
 
               accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx"
 
+              className="block w-full rounded-lg border border-border bg-white px-3 py-2 text-sm"
+
               onChange={
                 (
                   event
@@ -1743,20 +1591,12 @@ export default function BgDetails() {
                       ...current,
 
                       file:
-                        event.target.files
-                          ?.[0] ||
+                        event.target.files?.[0] ??
                         null,
                     })
                   )
               }
-
-              className="block w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-ink-900"
             />
-
-
-            <p className="mt-1 text-[11px] text-muted">
-              PDF, JPG, PNG, DOC, DOCX, XLS, XLSX · Max 10 MB
-            </p>
 
           </div>
 
@@ -1764,8 +1604,6 @@ export default function BgDetails() {
           <div className="flex items-end">
 
             <Button
-
-              type="button"
 
               variant="accent"
 
@@ -1798,35 +1636,24 @@ export default function BgDetails() {
         </div>
 
 
-        {/* =====================================================
-            DOCUMENT LIST
-        ===================================================== */}
-
         {
           documentsLoading
 
             ? (
 
                 <div className="mt-6">
-
                   <Loader />
-
                 </div>
 
               )
 
-            : documents.length ===
-              0
+            : documents.length === 0
 
               ? (
 
-                  <div className="mt-6 rounded-xl border border-dashed border-border px-4 py-8 text-center">
-
-                    <p className="text-sm text-muted">
-                      No documents uploaded yet.
-                    </p>
-
-                  </div>
+                  <p className="mt-6 text-sm text-muted">
+                    No documents uploaded yet.
+                  </p>
 
                 )
 
@@ -1834,7 +1661,7 @@ export default function BgDetails() {
 
                   <div className="mt-6 overflow-x-auto">
 
-                    <table className="min-w-full text-sm">
+                    <table className="w-full min-w-[900px] text-sm">
 
                       <thead>
 
@@ -1845,7 +1672,7 @@ export default function BgDetails() {
                           </th>
 
                           <th className="py-3 pr-4">
-                            Document Type
+                            Type
                           </th>
 
                           <th className="py-3 pr-4">
@@ -1857,7 +1684,7 @@ export default function BgDetails() {
                           </th>
 
                           <th className="py-3 pr-4">
-                            Uploaded At
+                            Date
                           </th>
 
                           <th className="py-3 text-right">
@@ -1878,95 +1705,40 @@ export default function BgDetails() {
                             ) => (
 
                               <tr
-
                                 key={
                                   doc.id
                                 }
-
                                 className="border-b border-border/70"
                               >
 
-                                <td className="py-3 pr-4">
-
-                                  <div>
-
-                                    <p className="font-medium text-ink-900">
-
-                                      {
-                                        doc.fileName
-                                      }
-
-                                    </p>
-
-
-                                    <p className="mt-1 text-xs text-muted">
-
-                                      {
-                                        formatFileSize(
-                                          doc.fileSize
-                                        )
-                                      }
-
-
-                                      {
-                                        doc.fileType
-                                          ? ` · ${doc.fileType}`
-                                          : ''
-                                      }
-
-                                    </p>
-
-                                  </div>
-
+                                <td className="py-4 pr-4 font-medium">
+                                  {doc.fileName}
                                 </td>
 
 
-                                <td className="py-3 pr-4">
-
-                                  {
-                                    doc.documentType ||
-                                    '—'
-                                  }
-
+                                <td className="py-4 pr-4">
+                                  {doc.documentType || '—'}
                                 </td>
 
 
-                                <td className="py-3 pr-4">
-
-                                  {
-                                    doc.remarks ||
-                                    '—'
-                                  }
-
+                                <td className="py-4 pr-4">
+                                  {doc.remarks || '—'}
                                 </td>
 
 
-                                <td className="py-3 pr-4">
-
-                                  {
-                                    doc.uploadedBy ||
-                                    '—'
-                                  }
-
+                                <td className="py-4 pr-4">
+                                  {doc.uploadedBy || '—'}
                                 </td>
 
 
-                                <td className="py-3 pr-4">
-
-                                  {
-                                    formatDateTime(
-                                      doc.uploadedAt
-                                    )
-                                  }
-
+                                <td className="py-4 pr-4">
+                                  {formatDateTime(doc.uploadedAt)}
                                 </td>
 
 
-                                <td className="py-3">
+                                <td className="py-4">
 
                                   <div className="flex justify-end gap-1">
-
-                                    {/* VIEW */}
 
                                     <button
 
@@ -1979,19 +1751,13 @@ export default function BgDetails() {
                                           )
                                       }
 
-                                      className="rounded-lg p-2 text-muted transition hover:bg-ink-50 hover:text-ink-900"
-
-                                      title="View document"
+                                      className="rounded-lg p-2 text-muted hover:bg-ink-50 hover:text-ink-900"
                                     >
 
-                                      <Eye
-                                        size={16}
-                                      />
+                                      <Eye size={16} />
 
                                     </button>
 
-
-                                    {/* DOWNLOAD */}
 
                                     <button
 
@@ -2004,19 +1770,13 @@ export default function BgDetails() {
                                           )
                                       }
 
-                                      className="rounded-lg p-2 text-muted transition hover:bg-ink-50 hover:text-ink-900"
-
-                                      title="Download document"
+                                      className="rounded-lg p-2 text-muted hover:bg-ink-50 hover:text-ink-900"
                                     >
 
-                                      <Download
-                                        size={16}
-                                      />
+                                      <Download size={16} />
 
                                     </button>
 
-
-                                    {/* DELETE */}
 
                                     <button
 
@@ -2034,14 +1794,10 @@ export default function BgDetails() {
                                           )
                                       }
 
-                                      className="rounded-lg p-2 text-muted transition hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
-
-                                      title="Delete document"
+                                      className="rounded-lg p-2 text-muted hover:bg-red-50 hover:text-red-600"
                                     >
 
-                                      <Trash2
-                                        size={16}
-                                      />
+                                      <Trash2 size={16} />
 
                                     </button>
 
@@ -2066,7 +1822,7 @@ export default function BgDetails() {
 
 
       {/* ======================================================
-          ACTIVITY HISTORY
+          ACTIVITY
       ====================================================== */}
 
       <Card className="mt-6">
@@ -2085,102 +1841,71 @@ export default function BgDetails() {
         </div>
 
 
-        {
-          !bg.activityHistory ||
-          bg.activityHistory.length ===
-          0
-
-            ? (
-
-                <p className="mt-5 text-sm text-muted">
-                  No activity recorded yet.
-                </p>
-
-              )
-
-            : (
-
-                <div className="mt-5 divide-y divide-border">
-
-                  {
-                    bg.activityHistory.map(
-                      (
-                        activity,
-                        index
-                      ) => (
-
-                        <div
-
-                          key={
-                            activity.id ||
-                            index
-                          }
-
-                          className="flex items-start justify-between gap-4 py-4"
-                        >
-
-                          <div>
-
-                            <p className="text-sm font-medium text-ink-900">
-
-                              {
-                                activity.action ||
-                                activity.title ||
-                                'Updated'
-                              }
-
-                            </p>
-
-
-                            <p className="mt-1 text-xs text-muted">
-
-                              {
-                                activity.description ||
-                                activity.message ||
-                                '—'
-                              }
-
-                            </p>
-
-                          </div>
-
-
-                          <div className="text-right text-xs text-muted">
-
-                            <p>
-
-                              {
-                                activity.username ||
-                                activity.performedBy ||
-                                '—'
-                              }
-
-                            </p>
-
-
-                            <p className="mt-1">
-
-                              {
-                                formatDateTime(
-                                  activity.createdAt ||
-                                  activity.timestamp
-                                )
-                              }
-
-                            </p>
-
-                          </div>
-
-                        </div>
-                      )
-                    )
-                  }
-
-                </div>
-              )
-        }
+        <p className="mt-5 text-sm text-muted">
+          Bank Guarantee activity and audit changes are recorded in the Audit Log.
+        </p>
 
       </Card>
+
+
+      {/* ======================================================
+          UNLINK CONFIRM
+      ====================================================== */}
+
+      <ConfirmDialog
+
+        open={
+          Boolean(
+            unlinkTarget
+          )
+        }
+
+        title="Are you sure?"
+
+        message={
+          unlinkTarget
+            ? `This will unlink Fixed Deposit ${
+                getFdNumber(
+                  unlinkTarget
+                )
+              } from this Bank Guarantee. ${
+                formatCurrency(
+                  getLinkedAmount(
+                    unlinkTarget
+                  )
+                )
+              } will be released. The Fixed Deposit itself will not be deleted.`
+            : ''
+        }
+
+        confirmText="Unlink"
+
+        loadingText="Unlinking…"
+
+        loading={
+          Boolean(
+            unlinkingId
+          )
+        }
+
+        onCancel={
+          () => {
+
+            if (
+              !unlinkingId
+            ) {
+
+              setUnlinkTarget(
+                null
+              )
+            }
+          }
+        }
+
+        onConfirm={
+          handleConfirmUnlink
+        }
+      />
 
     </div>
   )
@@ -2188,9 +1913,7 @@ export default function BgDetails() {
 
 
 // =========================================================
-// LINK RESPONSE HELPERS
-//
-// Backend DTO field name thoda alag hua to bhi UI chale.
+// FD HELPERS
 // =========================================================
 
 function getFdNumber(
@@ -2198,10 +1921,10 @@ function getFdNumber(
 ) {
 
   return (
-    link.fdNumber ??
-    link.fixedDepositNumber ??
-    link.fixedDeposit?.fdNumber ??
-    link.fd?.fdNumber ??
+    link?.fdNo ??
+    link?.fdNumber ??
+    link?.fixedDepositNumber ??
+    link?.fixedDeposit?.fdNumber ??
     '—'
   )
 }
@@ -2212,11 +1935,10 @@ function getFdBankName(
 ) {
 
   return (
-    link.bankName ??
-    link.fdBankName ??
-    link.fixedDeposit?.bankName ??
-    link.fixedDeposit?.bank?.bankName ??
-    link.fd?.bankName ??
+    link?.bankName ??
+    link?.fdBankName ??
+    link?.fixedDeposit?.bankName ??
+    link?.fixedDeposit?.bank?.bankName ??
     '—'
   )
 }
@@ -2227,11 +1949,9 @@ function getFdAmount(
 ) {
 
   return safeNumber(
-
-    link.fdAmount ??
-    link.fixedDepositAmount ??
-    link.fixedDeposit?.fdAmount ??
-    link.fd?.fdAmount
+    link?.fdAmount ??
+    link?.fixedDepositAmount ??
+    link?.fixedDeposit?.fdAmount
   )
 }
 
@@ -2241,8 +1961,19 @@ function getLinkedAmount(
 ) {
 
   return safeNumber(
-    link.linkedAmount ??
-    link.amount
+    link?.linkedAmount ??
+    link?.amount
+  )
+}
+
+
+function getAvailableAmount(
+  link
+) {
+
+  return safeNumber(
+    link?.availableAmount ??
+    link?.fdAvailableAmount
   )
 }
 
@@ -2252,10 +1983,9 @@ function getFdMaturityDate(
 ) {
 
   return (
-    link.fdMaturityDate ??
-    link.maturityDate ??
-    link.fixedDeposit?.fdMaturityDate ??
-    link.fd?.fdMaturityDate ??
+    link?.maturityDate ??
+    link?.fdMaturityDate ??
+    link?.fixedDeposit?.fdMaturityDate ??
     null
   )
 }
@@ -2265,10 +1995,9 @@ function getFdMaturityDate(
 // SUMMARY
 // =========================================================
 
-function Summary({
+function SummaryCard({
   label,
   value,
-  highlight = false,
 }) {
 
   return (
@@ -2279,17 +2008,8 @@ function Summary({
         {label}
       </p>
 
-
-      <p
-        className={`mt-2 text-lg font-semibold ${
-          highlight
-            ? 'text-bg-700'
-            : 'text-ink-900'
-        }`}
-      >
-
+      <p className="mt-2 text-lg font-semibold text-ink-900">
         {value}
-
       </p>
 
     </Card>
@@ -2314,7 +2034,6 @@ function Info({
         {label}
       </p>
 
-
       <p className="mt-1 text-sm font-medium text-ink-900">
         {value}
       </p>
@@ -2325,70 +2044,7 @@ function Info({
 
 
 // =========================================================
-// FILE SIZE
-// =========================================================
-
-function formatFileSize(
-  bytes
-) {
-
-  if (
-    bytes === null ||
-    bytes === undefined
-  ) {
-
-    return '—'
-  }
-
-
-  const size =
-    Number(
-      bytes
-    )
-
-
-  if (
-    !Number.isFinite(
-      size
-    )
-  ) {
-
-    return '—'
-  }
-
-
-  if (
-    size < 1024
-  ) {
-
-    return `${size} B`
-  }
-
-
-  if (
-    size <
-    1024 * 1024
-  ) {
-
-    return `${(
-      size /
-      1024
-    ).toFixed(1)} KB`
-  }
-
-
-  return `${(
-    size /
-    (
-      1024 *
-      1024
-    )
-  ).toFixed(1)} MB`
-}
-
-
-// =========================================================
-// DATE TIME
+// DATETIME
 // =========================================================
 
 function formatDateTime(
@@ -2398,7 +2054,6 @@ function formatDateTime(
   if (
     !value
   ) {
-
     return '—'
   }
 
@@ -2414,7 +2069,6 @@ function formatDateTime(
       date.getTime()
     )
   ) {
-
     return value
   }
 
@@ -2422,7 +2076,6 @@ function formatDateTime(
   return date.toLocaleString(
     'en-IN',
     {
-
       day:
         '2-digit',
 
